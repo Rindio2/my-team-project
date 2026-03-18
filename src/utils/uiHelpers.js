@@ -122,4 +122,4 @@ export function showPackingReport(reportEl, { packedCount, remaining, usedVol, t
     </div>
   `;
   reportEl.style.display = 'block';
-}
+} // các hàm hỗ trợ hiển thị thông tin chi tiết về thùng được chọn, kết quả tính sức chứa và báo cáo quá trình xếp thùng, giúp người dùng dễ dàng nắm bắt thông tin quan trọng và đánh giá hiệu quả của quá trình xếp thùng trong container

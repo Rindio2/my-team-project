@@ -52,4 +52,4 @@ export default function ToolsSection() {
       </div>
     </div>
   );
-}
+} // phần công cụ chính để điều khiển việc xếp thùng, bao gồm undo/redo, xóa, sinh thùng ngẫu nhiên, chuyển đổi chế độ di chuyển/xoay, reset camera, lưu/tải trạng thái và điều chỉnh độ mờ của thùng để dễ quan sát khi có nhiều thùng chồng lên nhau

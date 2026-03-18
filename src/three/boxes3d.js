@@ -78,4 +78,4 @@ export function createCarton(scene, existingCount, { w, h, d, x, y, z, weight })
 
   scene.add(mesh);
   return mesh;
-}
+} // hình dạng 3d của các box carton, có thể tùy chỉnh vật liệu và hiệu ứng nếu muốn, hiện tại ưu tiên đơn giản để dễ nhìn và render mượt trên nhiều máy tính

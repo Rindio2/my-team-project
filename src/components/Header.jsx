@@ -15,4 +15,4 @@ export default function Header() {
       </div>
     </header>
   );
-}
+} // thành phần header đơn giản, hiển thị tên ứng dụng, thống kê số lượng thùng và dung tích đã sử dụng, cùng với các nút chức

@@ -66,4 +66,4 @@ export default function CapacityCalculatorSection() {
       ></div>
     </div>
   );
-}
+} // thành phần tính toán sức chứa tối đa của container dựa trên kích thước và trọng lượng của thùng, giúp người dùng nhanh chóng ước lượng được số lượng thùng có thể xếp vào container trước khi bắt đầu quá trình xếp thùng thực tế, cũng như cung cấp tùy chọn tự động xếp tối đa với khả năng chống sốc để tối ưu hóa không gian và bảo vệ hàng hóa trong quá trình vận chuyển

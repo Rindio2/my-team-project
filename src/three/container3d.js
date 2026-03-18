@@ -54,4 +54,4 @@ export function updateContainerMesh({ group, box3, width, height, depth, opacity
   group.add(innerGrid);
 
   box3.setFromObject(group);
-}
+} // tạo hình dạng 3d của container, gồm vỏ ngoài trong suốt, khung dây nổi bật và sàn container, có thể tùy chỉnh độ dày vỏ và màu sắc nếu muốn

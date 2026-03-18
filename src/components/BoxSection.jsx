@@ -34,4 +34,4 @@ export default function BoxSection() {
       </button>
     </div>
   );
-}
+} // phần thêm thùng mới vào scene, cho phép người dùng nhập kích thước, trọng lượng và số lượng của thùng trước khi tạo, giúp quá trình xếp thùng trở nên linh hoạt và phù hợp với nhu cầu thực tế của người dùng, có thể mở rộng thêm các thuộc tính khác như loại hàng hóa, hạn sử dụng, v.v. nếu cần thiết

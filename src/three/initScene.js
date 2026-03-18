@@ -166,4 +166,4 @@ export function createSceneSystem(canvasDiv) {
     render,
     fitCameraToBox,
   };
-}
+} // khởi tạo hệ thống scene 3d, bao gồm camera, renderer, controls, ánh sáng, mặt đất và hiệu ứng sao nền, cũng như một số hàm tiện ích để điều chỉnh kích thước và vị trí camera phù hợp với kích thước container sau này

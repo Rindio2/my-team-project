@@ -201,4 +201,4 @@ export function calculateCapacity({
     maxBoxes,
     boxWeight,
   };
-}
+} // hàm tính toán sức chứa tối đa của container dựa trên kích thước và trọng lượng của thùng, trả về số lượng thùng có thể xếp theo không gian, theo trọng lượng và tổng số thùng tối đa có thể xếp được, cùng với thông tin chi tiết về cách xếp thùng tốt nhất và các túi chống sốc cần thiết để bảo vệ hàng hóa trong quá trình vận chuyển

@@ -27,4 +27,4 @@ export default function ContainerSection() {
       </div>
     </div>
   );
-}
+} // phần chọn loại container và nhập kích thước tùy chỉnh, giúp người dùng dễ dàng thiết lập kích thước và tải trọng của container trước khi bắt đầu xếp thùng, có thể mở rộng thêm các loại container khác nếu cần thiết
