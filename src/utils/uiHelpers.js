@@ -84,15 +84,19 @@ export function showSelectedInfo(panel, content, box) {
   if (!panel || !content || !box) return;
 
   const s = box.userData.size;
+  const original = box.userData.originalSize || s;
   const w = box.userData.weight;
   const pos = box.position;
   const vol = (s.w * s.h * s.d) / 1000000;
-  const density = w / vol;
+  const density = vol > 0 ? w / vol : 0;
+  const label = box.userData.label || 'Không xác định';
 
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
       <span>🆔 ID:</span><span style="font-weight:bold;">${box.userData.id}</span>
-      <span>📐 Kích thước:</span><span>${s.w} x ${s.h} x ${s.d} cm</span>
+      <span>🏷️ Loại:</span><span>${label}</span>
+      <span>📐 Kích thước hiện tại:</span><span>${s.w} x ${s.h} x ${s.d} cm</span>
+      <span>📦 Kích thước gốc:</span><span>${original.w} x ${original.h} x ${original.d} cm</span>
       <span>📦 Thể tích:</span><span>${vol.toFixed(2)} m³</span>
       <span>⚖️ Trọng lượng:</span><span>${w} kg</span>
       <span>📊 Mật độ:</span><span>${density.toFixed(1)} kg/m³</span>

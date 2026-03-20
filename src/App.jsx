@@ -6,6 +6,8 @@ import Sidebar from './components/Sidebar';
 
 import { CONTAINER_TYPES } from './constants/containerTypes';
 import { calculateCapacity } from './utils/capacity';
+import { optimizeMixedPacking } from './utils/multiBoxPacking';
+import { compactPlacedLayout } from './utils/layoutCompactor';
 import { showCapacityResult, showPackingReport, showSelectedInfo } from './utils/uiHelpers';
 
 import { createSceneSystem } from './three/initScene';
@@ -33,6 +35,8 @@ export default function App() {
     const btnAutoArrangeCapacity = document.getElementById('btnAutoArrangeCapacity');
     const shockOptions = document.getElementById('shockOptions');
     const btnApplyShockVisual = document.getElementById('btnApplyShockVisual');
+    const multiBoxTypesList = document.getElementById('multiBoxTypesList');
+    const btnAddBoxType = document.getElementById('btnAddBoxType');
 
     const cw = document.getElementById('cw');
     const ch = document.getElementById('ch');
@@ -52,8 +56,26 @@ export default function App() {
     let resizeObserver;
     let lastCapacityData = null;
 
+    let multiBoxTypes = [
+      { id: Date.now(), label: 'Loại 1', w: 60, h: 50, d: 80, weight: 20, qty: 2 },
+    ];
+
     const raycaster = new sceneSys.THREE.Raycaster();
     const pointer = new sceneSys.THREE.Vector2();
+
+    function getCurrentContainerMaxLoad() {
+      const selectedType = contType.value;
+      if (CONTAINER_TYPES[selectedType]?.maxLoad) {
+        return CONTAINER_TYPES[selectedType].maxLoad;
+      }
+
+      const calcMaxWeightEl = document.getElementById('calcContainerMaxWeight');
+      if (calcMaxWeightEl && Number(calcMaxWeightEl.value) > 0) {
+        return Number(calcMaxWeightEl.value);
+      }
+
+      return Infinity;
+    }
 
     function getShockMode() {
       const center = document.getElementById('shockCenter');
@@ -124,6 +146,8 @@ export default function App() {
 
     function addBox(params) {
       const box = createCarton(scene, boxes.length, params);
+      box.userData.label = params.label || 'Thùng';
+      box.userData.originalSize = params.originalSize || { w: params.w, h: params.h, d: params.d };
       boxes.push(box);
       updateStats();
       return box;
@@ -144,6 +168,8 @@ export default function App() {
         h: b.userData.size.h,
         d: b.userData.size.d,
         weight: b.userData.weight,
+        label: b.userData.label || 'Thùng',
+        originalSize: b.userData.originalSize || b.userData.size,
       }));
 
       clearBoxes();
@@ -152,11 +178,16 @@ export default function App() {
       const W = +cw.value;
       const H = +ch.value;
       const D = +cd.value;
+
+      const containerMaxWeight = getCurrentContainerMaxLoad();
+      let runningWeight = 0;
+
       itemsToPack.sort((a, b) => b.w * b.h * b.d - a.w * a.h * a.d);
 
       let layerY = 0;
       let usedVol = 0;
       let packedCount = 0;
+      let rejectedByWeight = 0;
 
       while (layerY + 5 < H && itemsToPack.length > 0) {
         let layerH = 0;
@@ -168,6 +199,14 @@ export default function App() {
 
           for (let i = 0; i < itemsToPack.length; i++) {
             const it = itemsToPack[i];
+
+            if (runningWeight + it.weight > containerMaxWeight) {
+              rejectedByWeight++;
+              itemsToPack.splice(i, 1);
+              i--;
+              continue;
+            }
+
             if (x + it.w <= W / 2 && z + it.d <= D / 2 && layerY + it.h <= H) {
               addBox({
                 w: it.w,
@@ -177,8 +216,11 @@ export default function App() {
                 y: layerY + it.h / 2,
                 z: z + it.d / 2,
                 weight: it.weight,
+                label: it.label,
+                originalSize: it.originalSize,
               });
               usedVol += it.w * it.h * it.d;
+              runningWeight += it.weight;
               packedCount++;
               x += it.w + 1;
               rowD = Math.max(rowD, it.d);
@@ -198,7 +240,7 @@ export default function App() {
 
       showPackingReport(reportEl, {
         packedCount,
-        remaining: itemsToPack.length,
+        remaining: itemsToPack.length + rejectedByWeight,
         usedVol,
         totalVol: W * H * D,
       });
@@ -263,6 +305,8 @@ export default function App() {
               z: startZ + iz * boxD,
               weight: boxWeight,
               isSample: created === 0,
+              label: 'Auto capacity',
+              originalSize: { w: boxW, h: boxH, d: boxD },
             });
 
             created++;
@@ -334,6 +378,8 @@ export default function App() {
               z: startZ + iz * boxD,
               weight: boxWeight,
               isSample: created === 0,
+              label: 'Shock basic',
+              originalSize: { w: boxW, h: boxH, d: boxD },
             });
 
             created++;
@@ -408,6 +454,8 @@ export default function App() {
               z: startZ + iz * boxD,
               weight: boxWeight,
               isSample: created === 0,
+              label: 'Shock center',
+              originalSize: { w: boxW, h: boxH, d: boxD },
             });
 
             created++;
@@ -424,7 +472,9 @@ export default function App() {
               y: startY + iy * boxH,
               z: startZ + iz * boxD,
               weight: boxWeight,
-              isSample: created === 0,
+              isSample: false,
+              label: 'Shock center',
+              originalSize: { w: boxW, h: boxH, d: boxD },
             });
 
             created++;
@@ -553,6 +603,316 @@ export default function App() {
       }
     }
 
+    function renderMultiBoxTypeRow(item, index) {
+      return `
+        <div class="multi-box-row" data-id="${item.id}" style="border:1px solid #334155;border-radius:10px;padding:12px;margin-bottom:10px;background:#0f172a;">
+          <div class="dimension-inputs">
+            <div class="input-group">
+              <label>Tên loại</label>
+              <input data-field="label" value="${item.label || `Loại ${index + 1}`}" />
+            </div>
+            <div class="input-group">
+              <label>Số lượng</label>
+              <input data-field="qty" type="number" min="1" value="${item.qty}" />
+            </div>
+          </div>
+
+          <div class="dimension-inputs">
+            <div class="input-group">
+              <label>Rộng</label>
+              <input data-field="w" type="number" min="1" value="${item.w}" />
+            </div>
+            <div class="input-group">
+              <label>Cao</label>
+              <input data-field="h" type="number" min="1" value="${item.h}" />
+            </div>
+            <div class="input-group">
+              <label>Dài</label>
+              <input data-field="d" type="number" min="1" value="${item.d}" />
+            </div>
+          </div>
+
+          <div class="dimension-inputs">
+            <div class="input-group">
+              <label>Khối lượng</label>
+              <input data-field="weight" type="number" min="1" value="${item.weight}" />
+            </div>
+          </div>
+
+          <button type="button" class="btn-icon danger btn-remove-box-type" title="Xóa loại thùng">🗑️</button>
+        </div>
+      `;
+    }
+
+    function bindMultiBoxTypeEvents() {
+      if (!multiBoxTypesList) return;
+
+      multiBoxTypesList.querySelectorAll('.multi-box-row').forEach((row) => {
+        const id = Number(row.dataset.id);
+
+        row.querySelectorAll('input').forEach((input) => {
+          input.addEventListener('input', (e) => {
+            const field = e.target.dataset.field;
+            const value = field === 'label' ? e.target.value : Number(e.target.value);
+
+            multiBoxTypes = multiBoxTypes.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    [field]: value,
+                  }
+                : item
+            );
+          });
+        });
+
+        const removeBtn = row.querySelector('.btn-remove-box-type');
+        removeBtn?.addEventListener('click', () => {
+          multiBoxTypes = multiBoxTypes.filter((item) => item.id !== id);
+          renderMultiBoxTypes();
+        });
+      });
+    }
+
+    function renderMultiBoxTypes() {
+      if (!multiBoxTypesList) return;
+      multiBoxTypesList.innerHTML = multiBoxTypes
+        .map((item, index) => renderMultiBoxTypeRow(item, index))
+        .join('');
+      bindMultiBoxTypeEvents();
+    }
+
+    function addMultiBoxType() {
+      multiBoxTypes.push({
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        label: `Loại ${multiBoxTypes.length + 1}`,
+        w: 60,
+        h: 50,
+        d: 80,
+        weight: 20,
+        qty: 1,
+      });
+      renderMultiBoxTypes();
+    }
+
+    function buildRejectedListHtml(title, items, color = '#fbbf24') {
+      if (!items || items.length === 0) return '';
+
+      return `
+        <div style="margin-top:12px;">
+          <div style="font-weight:700;color:${color};margin-bottom:8px;">${title}</div>
+          <div style="display:grid;gap:8px;">
+            ${items
+              .map(
+                (item) => `
+                  <div style="padding:10px;border-radius:8px;background:rgba(15,23,42,0.7);border:1px solid rgba(148,163,184,0.18);line-height:1.6;">
+                    <div><b>Loại thùng:</b> ${item.label}</div>
+                    <div><b>Kích thước:</b> Dài ${item.d} × Rộng ${item.w} × Cao ${item.h} cm</div>
+                    <div><b>Khối lượng:</b> ${item.weight} kg</div>
+                    <div><b>Số lượng bị loại:</b> ${item.count} thùng</div>
+                  </div>
+                `
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function buildOptimizeWarningHtml(result) {
+      const warnings = [];
+
+      if (result.overSpaceRequested) {
+        warnings.push(
+          `⚠️ Tổng số thùng yêu cầu vượt quá <b>dung tích không gian</b> của container. Hệ thống đã tự giảm bớt để chỉ giữ số lượng vừa đủ.`
+        );
+      }
+
+      if (result.overWeightRequested) {
+        warnings.push(
+          `⚠️ Tổng khối lượng thùng yêu cầu vượt quá <b>tải trọng tối đa</b> của container. Hệ thống đã tự loại bớt thùng để không vượt tải.`
+        );
+      }
+
+      const rejectedSpaceDetails =
+        result.rejectedBySpaceSummary && result.rejectedBySpaceSummary.length > 0
+          ? `
+            <div style="margin-top:10px;">
+              <div><b>📦 Thùng bị loại do không gian:</b> ${result.rejectedBySpaceCount} thùng</div>
+              <div style="margin-top:6px;display:grid;gap:6px;">
+                ${result.rejectedBySpaceSummary
+                  .map(
+                    (item) => `
+                      <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.06);">
+                        • ${item.label}: Dài ${item.d} × Rộng ${item.w} × Cao ${item.h} cm, ${item.weight} kg, bị loại ${item.count} thùng
+                      </div>
+                    `
+                  )
+                  .join('')}
+              </div>
+            </div>
+          `
+          : '';
+
+      const rejectedWeightDetails =
+        result.rejectedByWeightSummary && result.rejectedByWeightSummary.length > 0
+          ? `
+            <div style="margin-top:10px;">
+              <div><b>⚖️ Thùng bị loại do khối lượng:</b> ${result.rejectedByWeightCount} thùng</div>
+              <div style="margin-top:6px;display:grid;gap:6px;">
+                ${result.rejectedByWeightSummary
+                  .map(
+                    (item) => `
+                      <div style="padding:8px 10px;border-radius:8px;background:rgba(255,255,255,0.06);">
+                        • ${item.label}: Dài ${item.d} × Rộng ${item.w} × Cao ${item.h} cm, ${item.weight} kg, bị loại ${item.count} thùng
+                      </div>
+                    `
+                  )
+                  .join('')}
+              </div>
+            </div>
+          `
+          : '';
+
+      if (warnings.length === 0 && !rejectedSpaceDetails && !rejectedWeightDetails) return '';
+
+      return `
+        <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.45);color:#fde68a;line-height:1.65;">
+          ${warnings.map((w) => `<div>${w}</div>`).join('')}
+          ${rejectedSpaceDetails}
+          ${rejectedWeightDetails}
+        </div>
+      `;
+    }
+
+    function optimizeMultiTypeBoxes() {
+      const validTypes = multiBoxTypes.filter(
+        (t) =>
+          Number(t.qty) > 0 &&
+          Number(t.w) > 0 &&
+          Number(t.h) > 0 &&
+          Number(t.d) > 0 &&
+          Number(t.weight) > 0
+      );
+
+      if (validTypes.length === 0) {
+        reportEl.innerHTML = `
+          <div style="color:#f87171;font-weight:bold;">❌ Chưa có loại thùng hợp lệ</div>
+          <div>Vui lòng thêm ít nhất 1 loại thùng có số lượng, kích thước và khối lượng lớn hơn 0.</div>
+        `;
+        reportEl.style.display = 'block';
+        return;
+      }
+
+      clearBoxes();
+      clearShockVisuals(containerSys.shockGroup);
+      updateContainer();
+
+      const containerMaxWeight = getCurrentContainerMaxLoad();
+
+      const containerSize = {
+        w: +cw.value,
+        h: +ch.value,
+        d: +cd.value,
+      };
+
+      const result = optimizeMixedPacking({
+        container: containerSize,
+        boxTypes: validTypes,
+        maxWeight: containerMaxWeight,
+      });
+
+      const compactedPlaced = compactPlacedLayout(result.placed, containerSize, {
+        step: 1,
+        maxPasses: 30,
+        compactFloor: true,
+        compactFront: true,
+        compactLeft: true,
+      });
+
+      let lastBox = null;
+
+      compactedPlaced.forEach((item, index) => {
+        lastBox = addBox({
+          w: item.w,
+          h: item.h,
+          d: item.d,
+          x: item.x + item.w / 2,
+          y: item.y + item.h / 2,
+          z: item.z + item.d / 2,
+          weight: item.weight,
+          isSample: index === 0,
+          label: item.label,
+          originalSize: item.originalSize,
+        });
+      });
+
+      if (lastBox) {
+        selected = lastBox;
+        transformControl.attach(lastBox);
+        showSelectedInfo(infoPanel, infoText, lastBox);
+      }
+
+      const warningHtml = buildOptimizeWarningHtml(result);
+      const rejectedSpaceHtml = buildRejectedListHtml(
+        '📦 Danh sách thùng bị loại do không gian',
+        result.rejectedBySpaceSummary,
+        '#fbbf24'
+      );
+      const rejectedWeightHtml = buildRejectedListHtml(
+        '⚖️ Danh sách thùng bị loại do khối lượng',
+        result.rejectedByWeightSummary,
+        '#fb7185'
+      );
+
+      reportEl.innerHTML = `
+        <div style="color:#10b981;font-size:1.1rem;font-weight:bold;margin-bottom:8px;">
+          ✅ SẮP XẾP TỐI ƯU NHIỀU LOẠI THÙNG
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>📦 Tổng yêu cầu:</div>
+          <div style="text-align:right;font-weight:bold;">${result.totalRequested}</div>
+
+          <div>📦 Đã xếp thực tế:</div>
+          <div style="text-align:right;font-weight:bold;color:#10b981;">${result.packedCount}</div>
+
+          <div>❌ Không được xếp:</div>
+          <div style="text-align:right;font-weight:bold;color:#f59e0b;">${result.remaining}</div>
+
+          <div>📦 Loại do không gian:</div>
+          <div style="text-align:right;font-weight:bold;">${result.rejectedBySpaceCount}</div>
+
+          <div>⚖️ Loại do khối lượng:</div>
+          <div style="text-align:right;font-weight:bold;">${result.rejectedByWeightCount}</div>
+
+          <div>📊 Hiệu suất thể tích:</div>
+          <div style="text-align:right;font-weight:bold;">${result.efficiency.toFixed(2)}%</div>
+
+          <div>⚖️ Khối lượng đã xếp:</div>
+          <div style="text-align:right;font-weight:bold;">${result.totalPlacedWeight.toFixed(2)} kg</div>
+
+          <div>🚚 Tải trọng container:</div>
+          <div style="text-align:right;font-weight:bold;">${
+            Number.isFinite(result.maxWeight) ? result.maxWeight.toFixed(2) : 'Không giới hạn'
+          } kg</div>
+        </div>
+
+        <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:rgba(59,130,246,0.10);border:1px solid rgba(59,130,246,0.35);color:#bfdbfe;line-height:1.6;">
+          ℹ️ Thuật toán xếp vẫn giữ nguyên theo candidate points heuristic. Mô hình 3D đã được nén hiển thị để các thùng dồn sát hơn về <b>đầu container</b>, <b>vách trái</b> và <b>sàn</b>.
+        </div>
+
+        ${warningHtml}
+        ${rejectedSpaceHtml}
+        ${rejectedWeightHtml}
+
+        <div style="margin-top:10px;font-size:0.84rem;color:#cbd5e1;line-height:1.5;">
+          Hệ thống giữ nguyên logic chọn thùng của thuật toán tối ưu, nhưng sau đó sẽ thực hiện bước “compact layout” để giảm khoảng hở khi hiển thị trên mô hình 3D.
+        </div>
+      `;
+      reportEl.style.display = 'block';
+    }
+
     if (localStorage.getItem('contType')) {
       contType.value = localStorage.getItem('contType');
       cw.value = localStorage.getItem('cw') || 235;
@@ -562,6 +922,7 @@ export default function App() {
 
     updateContainer();
     syncCapacityInputs();
+    renderMultiBoxTypes();
     sceneSys.resize();
 
     contType.onchange = (e) => {
@@ -589,6 +950,7 @@ export default function App() {
 
     opacitySlider?.addEventListener('input', updateContainer);
     canvasDiv.addEventListener('pointerdown', handlePointerDown);
+    btnAddBoxType?.addEventListener('click', addMultiBoxType);
 
     document.getElementById('btnSpawn').onclick = () => {
       const w = +document.getElementById('bw').value || 60;
@@ -597,8 +959,18 @@ export default function App() {
       const weight = +document.getElementById('bWeight').value || 20;
       const qty = +document.getElementById('bQty').value || 1;
       const W = +cw.value;
+      const containerMaxWeight = getCurrentContainerMaxLoad();
+
+      let currentTotalWeight = boxes.reduce((sum, b) => sum + Number(b.userData.weight || 0), 0);
+      let createdCount = 0;
+      let rejectedByWeight = 0;
 
       for (let i = 0; i < qty; i++) {
+        if (currentTotalWeight + weight > containerMaxWeight) {
+          rejectedByWeight++;
+          continue;
+        }
+
         const offsetX = Math.random() * 60 - 30;
         const offsetZ = Math.random() * 140 - 70;
         const box = addBox({
@@ -609,12 +981,44 @@ export default function App() {
           y: h / 2,
           z: offsetZ,
           weight,
+          label: 'Thùng đơn',
+          originalSize: { w, h, d },
         });
 
-        if (i === qty - 1) {
+        currentTotalWeight += weight;
+        createdCount++;
+
+        if (i === qty - 1 || createdCount > 0) {
           selected = box;
           transformControl.attach(box);
         }
+      }
+
+      if (rejectedByWeight > 0) {
+        reportEl.innerHTML = `
+          <div style="color:#f59e0b;font-size:1.05rem;font-weight:bold;margin-bottom:8px;">
+            ⚠️ SỐ LƯỢNG THÙNG ĐÃ ĐƯỢC GIẢM
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>Yêu cầu tạo:</div>
+            <div style="text-align:right;font-weight:bold;">${qty}</div>
+
+            <div>Đã tạo:</div>
+            <div style="text-align:right;font-weight:bold;color:#10b981;">${createdCount}</div>
+
+            <div>Bị loại do vượt tải:</div>
+            <div style="text-align:right;font-weight:bold;color:#f59e0b;">${rejectedByWeight}</div>
+
+            <div>Tải trọng tối đa container:</div>
+            <div style="text-align:right;font-weight:bold;">${containerMaxWeight} kg</div>
+          </div>
+
+          <div style="margin-top:10px;color:#fde68a;line-height:1.6;">
+            Tổng khối lượng yêu cầu vượt giới hạn container nên hệ thống chỉ tạo số lượng vừa đủ để không vượt tải.
+          </div>
+        `;
+        reportEl.style.display = 'block';
       }
     };
 
@@ -624,25 +1028,41 @@ export default function App() {
 
     document.getElementById('btnAI').onclick = basicPacking;
     document.getElementById('btnAIPro').onclick = basicPacking;
+    document.getElementById('btnOptimizeMulti').onclick = optimizeMultiTypeBoxes;
+
     document.getElementById('btnClear').onclick = () => {
       clearBoxes();
       clearShockVisuals(containerSys.shockGroup);
       updateContainer();
+      reportEl.style.display = 'none';
     };
+
     document.getElementById('btnModeMove').onclick = () => transformControl.setMode('translate');
     document.getElementById('btnModeRotate').onclick = () => transformControl.setMode('rotate');
     document.getElementById('btnResetView').onclick = () =>
       sceneSys.fitCameraToBox(+cw.value, +ch.value, +cd.value);
 
     document.getElementById('btnRandom20').onclick = () => {
+      const containerMaxWeight = getCurrentContainerMaxLoad();
+      let currentTotalWeight = boxes.reduce((sum, b) => sum + Number(b.userData.weight || 0), 0);
+      let created = 0;
+      let skipped = 0;
+
       for (let i = 0; i < 20; i++) {
         const w = 30 + Math.floor(Math.random() * 70);
         const h = 30 + Math.floor(Math.random() * 70);
         const d = 30 + Math.floor(Math.random() * 70);
         const weight = 10 + Math.floor(Math.random() * 50);
+
+        if (currentTotalWeight + weight > containerMaxWeight) {
+          skipped++;
+          continue;
+        }
+
         const W = +cw.value;
         const offsetX = Math.random() * 200 - 100;
         const offsetZ = Math.random() * 260 - 130;
+
         addBox({
           w,
           h,
@@ -651,7 +1071,28 @@ export default function App() {
           y: h / 2,
           z: offsetZ,
           weight,
+          label: 'Ngẫu nhiên',
+          originalSize: { w, h, d },
         });
+
+        currentTotalWeight += weight;
+        created++;
+      }
+
+      if (skipped > 0) {
+        reportEl.innerHTML = `
+          <div style="color:#f59e0b;font-size:1.05rem;font-weight:bold;margin-bottom:8px;">
+            ⚠️ RANDOM THÙNG ĐÃ ĐƯỢC GIẢM
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div>Đã tạo:</div>
+            <div style="text-align:right;font-weight:bold;">${created}</div>
+
+            <div>Bị loại do vượt tải:</div>
+            <div style="text-align:right;font-weight:bold;">${skipped}</div>
+          </div>
+        `;
+        reportEl.style.display = 'block';
       }
     };
 
@@ -692,6 +1133,7 @@ export default function App() {
       window.removeEventListener('resize', sceneSys.resize);
       resizeObserver?.disconnect();
       canvasDiv.removeEventListener('pointerdown', handlePointerDown);
+      btnAddBoxType?.removeEventListener('click', addMultiBoxType);
       clearBoxes();
       clearShockVisuals(containerSys.shockGroup);
 
