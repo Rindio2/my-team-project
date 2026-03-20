@@ -56,8 +56,41 @@ export default function CapacityCalculatorSection() {
         className="btn-primary full-width"
         style={{ display: 'none', marginTop: '10px' }}
       >
-        📦 Tự động xếp tối đa + chống sốc
+        📦 Tự động xếp tối đa
       </button>
+
+      <div
+        id="shockOptions"
+        className="sidebar-section"
+        style={{ display: 'none', marginTop: '12px', padding: '12px' }}
+      >
+        <h3 style={{ marginBottom: '10px' }}>🧽 Chống sốc</h3>
+
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <label style={{ display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' }}>
+            <input type="radio" name="shockMode" id="shockBasic" value="basic" defaultChecked />
+            <span>Chèn theo cách cơ bản</span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' }}>
+            <input type="radio" name="shockMode" id="shockCenter" value="center" />
+            <span>Chèn giữa container</span>
+          </label>
+
+          <label style={{ display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' }}>
+            <input type="checkbox" id="shockNet" />
+            <span>Chèn lưới chống rơi hàng</span>
+          </label>
+        </div>
+
+        <button
+          id="btnApplyShockVisual"
+          className="btn-secondary full-width"
+          style={{ marginTop: '12px' }}
+        >
+          🎯 Hiển thị chống sốc trên mô hình 3D
+        </button>
+      </div>
 
       <div
         id="capacityResult"
@@ -66,4 +99,4 @@ export default function CapacityCalculatorSection() {
       ></div>
     </div>
   );
-} // thành phần tính toán sức chứa tối đa của container dựa trên kích thước và trọng lượng của thùng, giúp người dùng nhanh chóng ước lượng được số lượng thùng có thể xếp vào container trước khi bắt đầu quá trình xếp thùng thực tế, cũng như cung cấp tùy chọn tự động xếp tối đa với khả năng chống sốc để tối ưu hóa không gian và bảo vệ hàng hóa trong quá trình vận chuyển
+}

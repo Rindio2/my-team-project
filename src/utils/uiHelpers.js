@@ -49,7 +49,7 @@ export function showCapacityResult(resultBox, data) {
 
     <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08);">
       <div style="font-weight:bold;color:#93c5fd;margin-bottom:8px;">
-        🧽 Kích thước túi chống sốc tự tính
+        🧽 Số liệu chống sốc
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:0.92rem;">
@@ -64,25 +64,17 @@ export function showCapacityResult(resultBox, data) {
       </div>
 
       <div style="margin-top:10px;line-height:1.7;font-size:0.9rem;color:#dbeafe;">
-        <div><b>• Túi trái / phải:</b> ${fmt(pads.left.width)} × ${fmt(pads.left.height)} × ${fmt(pads.left.length)}</div>
-        <div style="padding-left:10px;color:#cbd5e1;">
-          (độ dày mỗi túi = ${fmt(summary.halfWidthGap)}, phủ mặt tiếp xúc bên hông)
-        </div>
+        <div><b>• Cơ bản - túi trái / phải:</b> ${fmt(pads.left.width)} × ${fmt(pads.left.height)} × ${fmt(pads.left.length)}</div>
+        <div><b>• Cơ bản - túi trước / sau:</b> ${fmt(pads.front.width)} × ${fmt(pads.front.height)} × ${fmt(pads.front.length)}</div>
+        <div><b>• Cơ bản - túi sàn / trần:</b> ${fmt(pads.bottom.width)} × ${fmt(pads.bottom.height)} × ${fmt(pads.bottom.length)}</div>
 
-        <div style="margin-top:6px;"><b>• Túi trước / sau:</b> ${fmt(pads.front.width)} × ${fmt(pads.front.height)} × ${fmt(pads.front.length)}</div>
-        <div style="padding-left:10px;color:#cbd5e1;">
-          (độ dày mỗi túi = ${fmt(summary.halfLengthGap)}, phủ mặt tiếp xúc đầu/cuối)
-        </div>
-
-        <div style="margin-top:6px;"><b>• Túi sàn / trần:</b> ${fmt(pads.bottom.width)} × ${fmt(pads.bottom.height)} × ${fmt(pads.bottom.length)}</div>
-        <div style="padding-left:10px;color:#cbd5e1;">
-          (độ dày mỗi túi = ${fmt(summary.halfHeightGap)}, phủ mặt tiếp xúc trên/dưới)
-        </div>
+        <div style="margin-top:8px;"><b>• Giữa container - túi giữa theo chiều rộng:</b> ${fmt(pads.centerWidthSplit.width)} × ${fmt(pads.centerWidthSplit.height)} × ${fmt(pads.centerWidthSplit.length)}</div>
+        <div><b>• Giữa container - túi trên nóc:</b> ${fmt(pads.topFull.width)} × ${fmt(pads.topFull.height)} × ${fmt(pads.topFull.length)}</div>
       </div>
 
       <div style="margin-top:10px;font-size:0.84rem;color:#cbd5e1;line-height:1.5;">
-        Quy ước hiển thị kích thước túi: <b>Rộng × Cao × Dài</b>. 
-        Túi chỉ tính tại các mặt ngoài cùng tiếp xúc trực tiếp với container, và phần khoảng trống còn lại được chia đều cho 2 mặt phẳng đối nhau.
+        Quy ước hiển thị kích thước: <b>Rộng × Cao × Dài</b>.<br/>
+        Với chế độ <b>chèn giữa container</b>, túi chống sốc nằm ở giữa theo <b>chiều rộng</b>, tức là tách khối hàng sang trái và phải.
       </div>
     </div>
   `;
@@ -122,4 +114,4 @@ export function showPackingReport(reportEl, { packedCount, remaining, usedVol, t
     </div>
   `;
   reportEl.style.display = 'block';
-} // các hàm hỗ trợ hiển thị thông tin chi tiết về thùng được chọn, kết quả tính sức chứa và báo cáo quá trình xếp thùng, giúp người dùng dễ dàng nắm bắt thông tin quan trọng và đánh giá hiệu quả của quá trình xếp thùng trong container
+}

@@ -40,48 +40,53 @@ function buildShockPads({
   const halfHeightGap = leftoverHeight / 2;
 
   return {
+    // kiểu cơ bản
     left: {
-      name: 'Túi trái',
       width: halfWidthGap,
       height: usedHeight,
       length: usedLength,
-      face: 'Mặt trái container',
     },
     right: {
-      name: 'Túi phải',
       width: halfWidthGap,
       height: usedHeight,
       length: usedLength,
-      face: 'Mặt phải container',
     },
     front: {
-      name: 'Túi trước',
       width: usedWidth,
       height: usedHeight,
       length: halfLengthGap,
-      face: 'Mặt trước container',
     },
     back: {
-      name: 'Túi sau',
       width: usedWidth,
       height: usedHeight,
       length: halfLengthGap,
-      face: 'Mặt sau container',
     },
     bottom: {
-      name: 'Túi sàn',
       width: usedWidth,
       height: halfHeightGap,
       length: usedLength,
-      face: 'Mặt sàn container',
     },
     top: {
-      name: 'Túi trần',
       width: usedWidth,
       height: halfHeightGap,
       length: usedLength,
-      face: 'Mặt trần container',
     },
+
+    // kiểu giữa container:
+    // túi nằm giữa theo CHIỀU RỘNG
+    centerWidthSplit: {
+      width: leftoverWidth,
+      height: usedHeight,
+      length: usedLength,
+    },
+
+    // túi trên nóc cho kiểu giữa container
+    topFull: {
+      width: usedWidth,
+      height: leftoverHeight,
+      length: usedLength,
+    },
+
     summary: {
       halfLengthGap,
       halfWidthGap,
@@ -201,4 +206,4 @@ export function calculateCapacity({
     maxBoxes,
     boxWeight,
   };
-} // hàm tính toán sức chứa tối đa của container dựa trên kích thước và trọng lượng của thùng, trả về số lượng thùng có thể xếp theo không gian, theo trọng lượng và tổng số thùng tối đa có thể xếp được, cùng với thông tin chi tiết về cách xếp thùng tốt nhất và các túi chống sốc cần thiết để bảo vệ hàng hóa trong quá trình vận chuyển
+}

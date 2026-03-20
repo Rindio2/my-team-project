@@ -9,7 +9,12 @@ import { calculateCapacity } from './utils/capacity';
 import { showCapacityResult, showPackingReport, showSelectedInfo } from './utils/uiHelpers';
 
 import { createSceneSystem } from './three/initScene';
-import { createContainerGroup, updateContainerMesh } from './three/container3d';
+import {
+  createContainerGroup,
+  updateContainerMesh,
+  renderShockVisuals,
+  clearShockVisuals,
+} from './three/container3d';
 import { createCarton, disposeBox } from './three/boxes3d';
 
 export default function App() {
@@ -26,6 +31,8 @@ export default function App() {
     const reportEl = document.getElementById('report');
     const capacityResult = document.getElementById('capacityResult');
     const btnAutoArrangeCapacity = document.getElementById('btnAutoArrangeCapacity');
+    const shockOptions = document.getElementById('shockOptions');
+    const btnApplyShockVisual = document.getElementById('btnApplyShockVisual');
 
     const cw = document.getElementById('cw');
     const ch = document.getElementById('ch');
@@ -47,6 +54,15 @@ export default function App() {
 
     const raycaster = new sceneSys.THREE.Raycaster();
     const pointer = new sceneSys.THREE.Vector2();
+
+    function getShockMode() {
+      const center = document.getElementById('shockCenter');
+      return center?.checked ? 'center' : 'basic';
+    }
+
+    function getShockNet() {
+      return !!document.getElementById('shockNet')?.checked;
+    }
 
     function syncCapacityInputs() {
       const calcContainerLength = document.getElementById('calcContainerLength');
@@ -72,6 +88,7 @@ export default function App() {
         height: +ch.value,
         depth: +cd.value,
         opacity: +(opacitySlider?.value || 0.18),
+        shockGroup: containerSys.shockGroup,
       });
 
       sceneSys.fitCameraToBox(+cw.value, +ch.value, +cd.value);
@@ -130,6 +147,7 @@ export default function App() {
       }));
 
       clearBoxes();
+      clearShockVisuals(containerSys.shockGroup);
 
       const W = +cw.value;
       const H = +ch.value;
@@ -204,17 +222,17 @@ export default function App() {
       if (btnAutoArrangeCapacity) {
         btnAutoArrangeCapacity.style.display = result.ok ? 'block' : 'none';
       }
+
+      if (shockOptions) {
+        shockOptions.style.display = result.ok ? 'block' : 'none';
+      }
     }
 
-    function autoArrangeFromCapacity() {
-      if (!lastCapacityData || !lastCapacityData.ok) return;
+    function arrangeBoxesPlain() {
+      if (!lastCapacityData?.ok) return { created: 0, usedVol: 0, totalVol: 0 };
 
       const { best, maxBoxes, boxWeight } = lastCapacityData;
-      const { rotation, alongLength, alongWidth, alongHeight, shockPads } = best;
-
-      if (!rotation || maxBoxes <= 0) return;
-
-      clearBoxes();
+      const { rotation, alongLength, alongWidth, alongHeight } = best;
 
       const containerWidth = +document.getElementById('calcContainerWidth').value;
       const containerHeight = +document.getElementById('calcContainerHeight').value;
@@ -224,49 +242,27 @@ export default function App() {
       const boxH = rotation.h;
       const boxD = rotation.l;
 
-      const leftGap = shockPads?.left?.width || 0;
-      const rightGap = shockPads?.right?.width || 0;
-      const bottomGap = shockPads?.bottom?.height || 0;
-      const topGap = shockPads?.top?.height || 0;
-      const frontGap = shockPads?.front?.length || 0;
-      const backGap = shockPads?.back?.length || 0;
-
-      const usableWidth = containerWidth - leftGap - rightGap;
-      const usableHeight = containerHeight - bottomGap - topGap;
-      const usableLength = containerLength - frontGap - backGap;
-
-      const safeAlongWidth = Math.floor(usableWidth / boxW);
-      const safeAlongHeight = Math.floor(usableHeight / boxH);
-      const safeAlongLength = Math.floor(usableLength / boxD);
-
-      const finalAlongWidth = Math.min(alongWidth, safeAlongWidth);
-      const finalAlongHeight = Math.min(alongHeight, safeAlongHeight);
-      const finalAlongLength = Math.min(alongLength, safeAlongLength);
-
-      const startX = -containerWidth / 2 + leftGap + boxW / 2;
-      const startY = bottomGap + boxH / 2;
-      const startZ = -containerLength / 2 + frontGap + boxD / 2;
+      const startX = -containerWidth / 2 + boxW / 2;
+      const startY = boxH / 2;
+      const startZ = -containerLength / 2 + boxD / 2;
 
       let created = 0;
       let lastBox = null;
 
-      for (let iy = 0; iy < finalAlongHeight; iy++) {
-        for (let iz = 0; iz < finalAlongLength; iz++) {
-          for (let ix = 0; ix < finalAlongWidth; ix++) {
+      for (let iy = 0; iy < alongHeight; iy++) {
+        for (let iz = 0; iz < alongLength; iz++) {
+          for (let ix = 0; ix < alongWidth; ix++) {
             if (created >= maxBoxes) break;
-
-            const x = startX + ix * boxW;
-            const y = startY + iy * boxH;
-            const z = startZ + iz * boxD;
 
             lastBox = addBox({
               w: boxW,
               h: boxH,
               d: boxD,
-              x,
-              y,
-              z,
+              x: startX + ix * boxW,
+              y: startY + iy * boxH,
+              z: startZ + iz * boxD,
               weight: boxWeight,
+              isSample: created === 0,
             });
 
             created++;
@@ -282,8 +278,184 @@ export default function App() {
         showSelectedInfo(infoPanel, infoText, lastBox);
       }
 
-      const usedVol = created * boxW * boxH * boxD;
-      const totalVol = containerWidth * containerHeight * containerLength;
+      return {
+        created,
+        usedVol: created * boxW * boxH * boxD,
+        totalVol: containerWidth * containerHeight * containerLength,
+      };
+    }
+
+    function arrangeBoxesBasicShock() {
+      if (!lastCapacityData?.ok) return { created: 0, usedVol: 0, totalVol: 0 };
+
+      const { best, maxBoxes, boxWeight } = lastCapacityData;
+      const { rotation, alongLength, alongWidth, alongHeight, shockPads } = best;
+
+      const containerWidth = +document.getElementById('calcContainerWidth').value;
+      const containerHeight = +document.getElementById('calcContainerHeight').value;
+      const containerLength = +document.getElementById('calcContainerLength').value;
+
+      const boxW = rotation.w;
+      const boxH = rotation.h;
+      const boxD = rotation.l;
+
+      const leftGap = shockPads.left.width;
+      const rightGap = shockPads.right.width;
+      const frontGap = shockPads.front.length;
+      const backGap = shockPads.back.length;
+      const topGap = shockPads.top.height;
+
+      const usableWidth = containerWidth - leftGap - rightGap;
+      const usableLength = containerLength - frontGap - backGap;
+      const usableHeight = containerHeight - topGap;
+
+      const finalAlongWidth = Math.floor(usableWidth / boxW);
+      const finalAlongLength = Math.floor(usableLength / boxD);
+      const finalAlongHeight = Math.floor(usableHeight / boxH);
+
+      const startX = -containerWidth / 2 + leftGap + boxW / 2;
+      const startY = boxH / 2;
+      const startZ = -containerLength / 2 + frontGap + boxD / 2;
+
+      let created = 0;
+      let lastBox = null;
+
+      for (let iy = 0; iy < Math.min(alongHeight, finalAlongHeight); iy++) {
+        for (let iz = 0; iz < Math.min(alongLength, finalAlongLength); iz++) {
+          for (let ix = 0; ix < Math.min(alongWidth, finalAlongWidth); ix++) {
+            if (created >= maxBoxes) break;
+
+            lastBox = addBox({
+              w: boxW,
+              h: boxH,
+              d: boxD,
+              x: startX + ix * boxW,
+              y: startY + iy * boxH,
+              z: startZ + iz * boxD,
+              weight: boxWeight,
+              isSample: created === 0,
+            });
+
+            created++;
+          }
+          if (created >= maxBoxes) break;
+        }
+        if (created >= maxBoxes) break;
+      }
+
+      if (lastBox) {
+        selected = lastBox;
+        transformControl.attach(lastBox);
+        showSelectedInfo(infoPanel, infoText, lastBox);
+      }
+
+      return {
+        created,
+        usedVol: created * boxW * boxH * boxD,
+        totalVol: containerWidth * containerHeight * containerLength,
+      };
+    }
+
+    function arrangeBoxesCenterShock() {
+      if (!lastCapacityData?.ok) return { created: 0, usedVol: 0, totalVol: 0 };
+
+      const { best, maxBoxes, boxWeight } = lastCapacityData;
+      const { rotation, alongLength, alongWidth, alongHeight, shockPads } = best;
+
+      const containerWidth = +document.getElementById('calcContainerWidth').value;
+      const containerHeight = +document.getElementById('calcContainerHeight').value;
+      const containerLength = +document.getElementById('calcContainerLength').value;
+
+      const boxW = rotation.w;
+      const boxH = rotation.h;
+      const boxD = rotation.l;
+
+      const centerGap = shockPads.centerWidthSplit.width;
+      const topGap = shockPads.topFull.height;
+      const frontGap = shockPads.summary.halfLengthGap;
+      const backGap = shockPads.summary.halfLengthGap;
+
+      const usableHeight = containerHeight - topGap;
+      const usableLength = containerLength - frontGap - backGap;
+
+      const finalAlongHeight = Math.floor(usableHeight / boxH);
+      const finalAlongLength = Math.floor(usableLength / boxD);
+
+      const totalCols = alongWidth;
+      const leftCols = Math.ceil(totalCols / 2);
+      const rightCols = Math.floor(totalCols / 2);
+
+      const leftStartX = -containerWidth / 2 + boxW / 2;
+      const rightStartX = -containerWidth / 2 + leftCols * boxW + centerGap + boxW / 2;
+
+      const startY = boxH / 2;
+      const startZ = -containerLength / 2 + frontGap + boxD / 2;
+
+      let created = 0;
+      let lastBox = null;
+
+      for (let iy = 0; iy < Math.min(alongHeight, finalAlongHeight); iy++) {
+        for (let iz = 0; iz < Math.min(alongLength, finalAlongLength); iz++) {
+          for (let ix = 0; ix < leftCols; ix++) {
+            if (created >= maxBoxes) break;
+
+            lastBox = addBox({
+              w: boxW,
+              h: boxH,
+              d: boxD,
+              x: leftStartX + ix * boxW,
+              y: startY + iy * boxH,
+              z: startZ + iz * boxD,
+              weight: boxWeight,
+              isSample: created === 0,
+            });
+
+            created++;
+          }
+
+          for (let ix = 0; ix < rightCols; ix++) {
+            if (created >= maxBoxes) break;
+
+            lastBox = addBox({
+              w: boxW,
+              h: boxH,
+              d: boxD,
+              x: rightStartX + ix * boxW,
+              y: startY + iy * boxH,
+              z: startZ + iz * boxD,
+              weight: boxWeight,
+              isSample: created === 0,
+            });
+
+            created++;
+          }
+
+          if (created >= maxBoxes) break;
+        }
+        if (created >= maxBoxes) break;
+      }
+
+      if (lastBox) {
+        selected = lastBox;
+        transformControl.attach(lastBox);
+        showSelectedInfo(infoPanel, infoText, lastBox);
+      }
+
+      return {
+        created,
+        usedVol: created * boxW * boxH * boxD,
+        totalVol: containerWidth * containerHeight * containerLength,
+      };
+    }
+
+    function autoArrangeFromCapacity() {
+      if (!lastCapacityData || !lastCapacityData.ok) return;
+
+      clearBoxes();
+      clearShockVisuals(containerSys.shockGroup);
+      updateContainer();
+
+      const result = arrangeBoxesPlain();
 
       reportEl.innerHTML = `
         <div style="color:#10b981;font-size:1.1rem;font-weight:bold;margin-bottom:8px;">
@@ -292,32 +464,69 @@ export default function App() {
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div>📦 Số thùng đã xếp:</div>
-          <div style="text-align:right;font-weight:bold;">${created}</div>
+          <div style="text-align:right;font-weight:bold;">${result.created}</div>
 
           <div>🔄 Hướng xoay:</div>
-          <div style="text-align:right;font-weight:bold;">${best.rotationText}</div>
-
-          <div>🧽 Túi trái / phải:</div>
-          <div style="text-align:right;font-weight:bold;">
-            ${shockPads.left.width.toFixed(2)} × ${shockPads.left.height.toFixed(2)} × ${shockPads.left.length.toFixed(2)}
-          </div>
-
-          <div>🧽 Túi trước / sau:</div>
-          <div style="text-align:right;font-weight:bold;">
-            ${shockPads.front.width.toFixed(2)} × ${shockPads.front.height.toFixed(2)} × ${shockPads.front.length.toFixed(2)}
-          </div>
-
-          <div>🧽 Túi sàn / trần:</div>
-          <div style="text-align:right;font-weight:bold;">
-            ${shockPads.bottom.width.toFixed(2)} × ${shockPads.bottom.height.toFixed(2)} × ${shockPads.bottom.length.toFixed(2)}
-          </div>
+          <div style="text-align:right;font-weight:bold;">${lastCapacityData.best.rotationText}</div>
 
           <div>📊 Hiệu suất thể tích:</div>
-          <div style="text-align:right;font-weight:bold;">${((usedVol / totalVol) * 100).toFixed(2)}%</div>
+          <div style="text-align:right;font-weight:bold;">${((result.usedVol / result.totalVol) * 100).toFixed(2)}%</div>
         </div>
 
         <div style="margin-top:10px;font-size:0.85rem;color:#cbd5e1;line-height:1.5;">
-          Các túi chống sốc được tính theo đúng kích thước mặt tiếp xúc ngoài rìa và phần khe hở còn dư được chia đều cho 2 mặt phẳng đối nhau.
+          Chống sốc chưa được hiển thị. Khi bạn chọn kiểu chống sốc và bấm nút hiển thị, hệ thống sẽ xếp lại thùng theo đúng kiểu chống sốc để tránh chồng hình.
+        </div>
+      `;
+      reportEl.style.display = 'block';
+    }
+
+    function applyShockVisual() {
+      if (!lastCapacityData?.ok) return;
+
+      const mode = getShockMode();
+      const withNet = getShockNet();
+
+      clearBoxes();
+      clearShockVisuals(containerSys.shockGroup);
+      updateContainer();
+
+      const arrangement =
+        mode === 'center' ? arrangeBoxesCenterShock() : arrangeBoxesBasicShock();
+
+      const containerWidth = +document.getElementById('calcContainerWidth').value;
+      const containerHeight = +document.getElementById('calcContainerHeight').value;
+      const containerLength = +document.getElementById('calcContainerLength').value;
+
+      renderShockVisuals({
+        shockGroup: containerSys.shockGroup,
+        mode,
+        withNet,
+        containerWidth,
+        containerHeight,
+        containerLength,
+        best: lastCapacityData.best,
+      });
+
+      const modeText = mode === 'center' ? 'Giữa container theo chiều rộng' : 'Cơ bản';
+      const netText = withNet ? 'Có' : 'Không';
+
+      reportEl.innerHTML = `
+        <div style="color:#10b981;font-size:1.1rem;font-weight:bold;margin-bottom:8px;">
+          ✅ ĐÃ HIỂN THỊ CHỐNG SỐC TRÊN MÔ HÌNH 3D
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div>Kiểu chống sốc:</div>
+          <div style="text-align:right;font-weight:bold;">${modeText}</div>
+
+          <div>Lưới chống rơi hàng:</div>
+          <div style="text-align:right;font-weight:bold;">${netText}</div>
+
+          <div>📦 Số thùng đang hiển thị:</div>
+          <div style="text-align:right;font-weight:bold;">${arrangement.created}</div>
+
+          <div>📊 Hiệu suất thể tích:</div>
+          <div style="text-align:right;font-weight:bold;">${((arrangement.usedVol / arrangement.totalVol) * 100).toFixed(2)}%</div>
         </div>
       `;
       reportEl.style.display = 'block';
@@ -410,11 +619,16 @@ export default function App() {
     };
 
     document.getElementById('btnCalcCapacity').onclick = handleCapacity;
-    btnAutoArrangeCapacity.onclick = autoArrangeFromCapacity;
+    if (btnAutoArrangeCapacity) btnAutoArrangeCapacity.onclick = autoArrangeFromCapacity;
+    if (btnApplyShockVisual) btnApplyShockVisual.onclick = applyShockVisual;
 
     document.getElementById('btnAI').onclick = basicPacking;
     document.getElementById('btnAIPro').onclick = basicPacking;
-    document.getElementById('btnClear').onclick = clearBoxes;
+    document.getElementById('btnClear').onclick = () => {
+      clearBoxes();
+      clearShockVisuals(containerSys.shockGroup);
+      updateContainer();
+    };
     document.getElementById('btnModeMove').onclick = () => transformControl.setMode('translate');
     document.getElementById('btnModeRotate').onclick = () => transformControl.setMode('rotate');
     document.getElementById('btnResetView').onclick = () =>
@@ -479,6 +693,7 @@ export default function App() {
       resizeObserver?.disconnect();
       canvasDiv.removeEventListener('pointerdown', handlePointerDown);
       clearBoxes();
+      clearShockVisuals(containerSys.shockGroup);
 
       renderer?.dispose?.();
 
