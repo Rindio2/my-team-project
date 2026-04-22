@@ -1,0 +1,92 @@
+name: Deploy Cloudflare Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME || 'packet-opt-control-tower' }}
+      CLOUDFLARE_PAGES_BRANCH: ${{ vars.CLOUDFLARE_PAGES_BRANCH || 'main' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Release Env Check
+        env:
+          VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
+          PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS || secrets.PUBLIC_APP_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          PUBLIC_SECURITY_CONTACT: ${{ secrets.PUBLIC_SECURITY_CONTACT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          CRM_RECIPIENT_EMAIL: ${{ secrets.CRM_RECIPIENT_EMAIL }}
+        run: npm run release:check-env -- --strict
+
+      - name: Smoke Test
+        run: npm run smoke
+
+      - name: E2E Release Check
+        env:
+          VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
+          PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS || secrets.PUBLIC_APP_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          PUBLIC_SECURITY_CONTACT: ${{ secrets.PUBLIC_SECURITY_CONTACT }}
+        run: npm run test:e2e
+
+      - name: Build Release Artifact
+        env:
+          VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
+          PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          PUBLIC_SECURITY_CONTACT: ${{ secrets.PUBLIC_SECURITY_CONTACT }}
+        run: npm run build
+
+      - name: Sync Cloudflare Pages Runtime Secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
+          ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS || secrets.PUBLIC_APP_URL }}
+          PUBLIC_SECURITY_CONTACT: ${{ secrets.PUBLIC_SECURITY_CONTACT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_FROM_EMAIL: ${{ secrets.RESEND_FROM_EMAIL }}
+          CRM_RECIPIENT_EMAIL: ${{ secrets.CRM_RECIPIENT_EMAIL }}
+        run: npm run cloudflare:sync-secrets -- --project-name "${CLOUDFLARE_PAGES_PROJECT_NAME}"
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=${{ env.CLOUDFLARE_PAGES_PROJECT_NAME }} --branch=${{ env.CLOUDFLARE_PAGES_BRANCH }}

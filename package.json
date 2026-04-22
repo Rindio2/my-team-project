@@ -5,11 +5,23 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prepare:public": "node scripts/sync-public-assets.mjs",
+    "prebuild": "npm run prepare:public",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "release:check-env": "node scripts/release-check.mjs",
+    "github:sync-actions-config": "node scripts/sync-github-actions-config.mjs",
+    "cloudflare:sync-secrets": "node scripts/sync-cloudflare-pages-secrets.mjs",
+    "release:bootstrap-config": "node scripts/bootstrap-release-config.mjs",
+    "smoke": "node scripts/smoke-check.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "preview": "vite preview",
+    "preview:cloudflare": "npm run build && wrangler pages dev dist",
+    "deploy:cloudflare": "npm run build && wrangler pages deploy dist --project-name=packet-opt-control-tower"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.103.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "three": "^0.183.2"
@@ -21,11 +33,13 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.0",
+    "@playwright/test": "^1.59.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
-    "vite": "^8.0.0"
+    "vite": "^8.0.0",
+    "wrangler": "^4.82.2"
   }
 }

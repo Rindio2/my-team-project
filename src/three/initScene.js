@@ -1,26 +1,54 @@
-import * as THREE from 'three';
+import {
+  ACESFilmicToneMapping,
+  AmbientLight,
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  DirectionalLight,
+  GridHelper,
+  Group,
+  MathUtils,
+  Mesh,
+  MeshStandardMaterial,
+  PCFSoftShadowMap,
+  PerspectiveCamera,
+  Plane,
+  PlaneGeometry,
+  PointLight,
+  Points,
+  PointsMaterial,
+  Raycaster,
+  Scene,
+  SphereGeometry,
+  SRGBColorSpace,
+  TorusGeometry,
+  Vector2,
+  Vector3,
+  WebGLRenderer,
+} from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 export function createSceneSystem(canvasDiv) {
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x07111f);
+  const scene = new Scene();
+  scene.background = new Color(0x07111f);
 
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 20000);
+  const camera = new PerspectiveCamera(55, 1, 0.1, 20000);
   camera.position.set(900, 600, 1200);
 
-  const renderer = new THREE.WebGLRenderer({
+  const renderer = new WebGLRenderer({
     antialias: true,
     preserveDrawingBuffer: true,
     powerPreference: 'high-performance',
     alpha: false,
   });
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.type = PCFSoftShadowMap;
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
+  renderer.localClippingEnabled = true;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   canvasDiv.appendChild(renderer.domElement);
 
@@ -34,6 +62,8 @@ export function createSceneSystem(canvasDiv) {
   const orbit = new OrbitControls(camera, renderer.domElement);
   orbit.enableDamping = true;
   orbit.dampingFactor = 0.08;
+  orbit.enablePan = true;
+  orbit.enableZoom = true;
   orbit.maxPolarAngle = Math.PI / 2 - 0.02;
   orbit.minDistance = 250;
   orbit.maxDistance = 5000;
@@ -46,22 +76,22 @@ export function createSceneSystem(canvasDiv) {
   });
   scene.add(transformControl);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+  scene.add(new AmbientLight(0xffffff, 1.1));
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+  const dirLight = new DirectionalLight(0xffffff, 1.8);
   dirLight.position.set(800, 1800, 1000);
   dirLight.castShadow = true;
   dirLight.shadow.mapSize.width = 2048;
   dirLight.shadow.mapSize.height = 2048;
   scene.add(dirLight);
 
-  const fillLight = new THREE.PointLight(0x88aaff, 1.0);
+  const fillLight = new PointLight(0x88aaff, 1.0);
   fillLight.position.set(-1200, 800, -800);
   scene.add(fillLight);
 
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(20000, 20000),
-    new THREE.MeshStandardMaterial({
+  const floor = new Mesh(
+    new PlaneGeometry(20000, 20000),
+    new MeshStandardMaterial({
       color: 0x0f1d35,
       roughness: 0.85,
       metalness: 0.05,
@@ -72,9 +102,9 @@ export function createSceneSystem(canvasDiv) {
   floor.receiveShadow = true;
   scene.add(floor);
 
-  scene.add(new THREE.GridHelper(4000, 80, 0x2dd4bf, 0x243b53));
+  scene.add(new GridHelper(4000, 80, 0x2dd4bf, 0x243b53));
 
-  const starsGeometry = new THREE.BufferGeometry();
+  const starsGeometry = new BufferGeometry();
   const starsCount = 800;
   const starsPositions = new Float32Array(starsCount * 3);
   for (let i = 0; i < starsCount * 3; i += 3) {
@@ -82,11 +112,11 @@ export function createSceneSystem(canvasDiv) {
     starsPositions[i + 1] = (Math.random() - 0.5) * 2000 + 400;
     starsPositions[i + 2] = (Math.random() - 0.5) * 4000 - 1200;
   }
-  starsGeometry.setAttribute('position', new THREE.BufferAttribute(starsPositions, 3));
+  starsGeometry.setAttribute('position', new BufferAttribute(starsPositions, 3));
 
-  const stars = new THREE.Points(
+  const stars = new Points(
     starsGeometry,
-    new THREE.PointsMaterial({
+    new PointsMaterial({
       color: 0x9cc2ff,
       size: 2,
       transparent: true,
@@ -95,16 +125,16 @@ export function createSceneSystem(canvasDiv) {
   );
   scene.add(stars);
 
-  const cogMarker = new THREE.Group();
-  const cogSphere = new THREE.Mesh(
-    new THREE.SphereGeometry(15, 32, 16),
-    new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200 })
+  const cogMarker = new Group();
+  const cogSphere = new Mesh(
+    new SphereGeometry(15, 32, 16),
+    new MeshStandardMaterial({ color: 0xffaa00, emissive: 0x442200 })
   );
   cogMarker.add(cogSphere);
 
-  const ringGeo = new THREE.TorusGeometry(25, 1, 16, 64);
-  const ringMat = new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x221100 });
-  const ring1 = new THREE.Mesh(ringGeo, ringMat);
+  const ringGeo = new TorusGeometry(25, 1, 16, 64);
+  const ringMat = new MeshStandardMaterial({ color: 0xffaa00, emissive: 0x221100 });
+  const ring1 = new Mesh(ringGeo, ringMat);
   ring1.rotation.x = Math.PI / 2;
   ring1.rotation.z = 0.3;
   cogMarker.add(ring1);
@@ -153,7 +183,7 @@ export function createSceneSystem(canvasDiv) {
   }
 
   return {
-    THREE,
+    THREE: { MathUtils, Plane, Raycaster, Vector2, Vector3 },
     scene,
     camera,
     renderer,

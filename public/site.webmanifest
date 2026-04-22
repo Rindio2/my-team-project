@@ -1,0 +1,18 @@
+{
+  "name": "Packet Opt Control Tower",
+  "short_name": "Packet Opt",
+  "description": "Commercial load planning suite for container packing, preflight audits, and 3D operational reviews.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#040913",
+  "theme_color": "#04131f",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

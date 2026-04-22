@@ -1,70 +1,76 @@
+import CommandButton from './CommandButton.jsx';
+import FieldGroup from './FieldGroup.jsx';
+import SidebarSectionCard from './SidebarSectionCard.jsx';
+
+const CAPACITY_FIELDS = [
+  [
+    { id: 'calcContainerLength', label: 'Dài container', defaultValue: '590' },
+    { id: 'calcContainerWidth', label: 'Rộng container', defaultValue: '235' },
+  ],
+  [
+    { id: 'calcContainerHeight', label: 'Cao container', defaultValue: '239' },
+    { id: 'calcContainerMaxWeight', label: 'Tải tối đa (kg)', defaultValue: '28200' },
+  ],
+  [
+    { id: 'calcBoxLength', label: 'Dài thùng', defaultValue: '80' },
+    { id: 'calcBoxWidth', label: 'Rộng thùng', defaultValue: '60' },
+  ],
+  [
+    { id: 'calcBoxHeight', label: 'Cao thùng', defaultValue: '50' },
+    { id: 'calcBoxWeight', label: 'Khối lượng thùng (kg)', defaultValue: '20' },
+  ],
+];
+
 export default function CapacityCalculatorSection() {
   return (
-    <div className="sidebar-section">
-      <h3>📐 Tính sức chứa tối đa</h3>
+    <SidebarSectionCard id="capacityCalculatorSection" icon="📐" title="Sức chứa">
+      {CAPACITY_FIELDS.map((row, rowIndex) => (
+        <div key={rowIndex} className="dimension-inputs">
+          {row.map((field) => (
+            <FieldGroup key={field.id} id={field.id} label={field.label}>
+              <input id={field.id} defaultValue={field.defaultValue} type="number" min="1" />
+            </FieldGroup>
+          ))}
+        </div>
+      ))}
 
-      <div className="dimension-inputs">
-        <div className="input-group">
-          <label>Dài container</label>
-          <input id="calcContainerLength" defaultValue="590" type="number" min="1" />
-        </div>
-        <div className="input-group">
-          <label>Rộng container</label>
-          <input id="calcContainerWidth" defaultValue="235" type="number" min="1" />
-        </div>
-      </div>
+      <CommandButton
+        id="btnCalcCapacity"
+        command="capacity-calc"
+        className="btn-secondary"
+        fullWidth
+        layout="stacked"
+      >
+        🧮 Tính sức chứa
+      </CommandButton>
 
-      <div className="dimension-inputs">
-        <div className="input-group">
-          <label>Cao container</label>
-          <input id="calcContainerHeight" defaultValue="239" type="number" min="1" />
-        </div>
-        <div className="input-group">
-          <label>Tải tối đa (kg)</label>
-          <input id="calcContainerMaxWeight" defaultValue="28200" type="number" min="1" />
-        </div>
-      </div>
-
-      <div className="dimension-inputs">
-        <div className="input-group">
-          <label>Dài thùng</label>
-          <input id="calcBoxLength" defaultValue="80" type="number" min="1" />
-        </div>
-        <div className="input-group">
-          <label>Rộng thùng</label>
-          <input id="calcBoxWidth" defaultValue="60" type="number" min="1" />
-        </div>
-      </div>
-
-      <div className="dimension-inputs">
-        <div className="input-group">
-          <label>Cao thùng</label>
-          <input id="calcBoxHeight" defaultValue="50" type="number" min="1" />
-        </div>
-        <div className="input-group">
-          <label>Khối lượng thùng (kg)</label>
-          <input id="calcBoxWeight" defaultValue="20" type="number" min="1" />
-        </div>
-      </div>
-
-      <button id="btnCalcCapacity" className="btn-secondary full-width">
-        🧮 Tính số thùng tối đa
-      </button>
+      <CommandButton
+        command="capacity-calc-arrange"
+        className="btn-primary"
+        fullWidth
+        layout="stacked"
+      >
+        📦 Tính + xếp tối đa
+      </CommandButton>
 
       <button
         id="btnAutoArrangeCapacity"
+        data-command="capacity-arrange"
         className="btn-primary full-width"
         style={{ display: 'none', marginTop: '10px' }}
       >
-        📦 Tự động xếp tối đa
+        📦 Xếp tối đa
       </button>
 
       <div
         id="shockOptions"
-        className="sidebar-section"
+        className="sidebar-section sub-section"
         style={{ display: 'none', marginTop: '12px', padding: '12px' }}
       >
-        <h3 style={{ marginBottom: '10px' }}>🧽 Chống sốc</h3>
+        <h3 className="section-heading compact-heading" style={{ marginBottom: '10px' }}>
+          <span className="section-icon">🧽</span>
+          <span className="section-title">Chống sốc</span>
+        </h3>
 
         <div style={{ display: 'grid', gap: '8px' }}>
           <label style={{ display: 'flex', gap: '8px', alignItems: 'center', cursor: 'pointer' }}>
@@ -85,6 +91,7 @@ export default function CapacityCalculatorSection() {
 
         <button
           id="btnApplyShockVisual"
+          data-command="shock-visual"
           className="btn-secondary full-width"
           style={{ marginTop: '12px' }}
         >
@@ -97,6 +104,6 @@ export default function CapacityCalculatorSection() {
         className="report-box"
         style={{ display: 'none', marginTop: '12px' }}
       ></div>
-    </div>
+    </SidebarSectionCard>
   );
 }

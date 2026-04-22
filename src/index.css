@@ -1,13 +1,18 @@
 :root {
-  font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+  font-family: Bahnschrift, 'Trebuchet MS', 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: #e2e8f0;
-  background-color: #0b1220;
+  background-color: #040913;
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 html,

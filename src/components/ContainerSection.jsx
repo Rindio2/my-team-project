@@ -1,8 +1,15 @@
+import FieldGroup from './FieldGroup.jsx';
+import SidebarSectionCard from './SidebarSectionCard.jsx';
+
+const CONTAINER_FIELDS = [
+  { id: 'cw', label: 'Rộng (X)', defaultValue: '235' },
+  { id: 'ch', label: 'Cao (Y)', defaultValue: '239' },
+  { id: 'cd', label: 'Dài (Z)', defaultValue: '590' },
+];
+
 export default function ContainerSection() {
   return (
-    <div className="sidebar-section">
-      <h3>📦 Container</h3>
-
+    <SidebarSectionCard id="containerSection" icon="📦" title="Container" defaultOpen>
       <select id="contType" className="full-width" defaultValue="20dc">
         <option value="20dc">20&apos; Dry (590 × 235 × 239)</option>
         <option value="40dc">40&apos; Dry (1203 × 235 × 239)</option>
@@ -12,19 +19,12 @@ export default function ContainerSection() {
       </select>
 
       <div className="dimension-inputs">
-        <div className="input-group">
-          <label>Rộng (X)</label>
-          <input id="cw" defaultValue="235" type="number" step="1" />
-        </div>
-        <div className="input-group">
-          <label>Cao (Y)</label>
-          <input id="ch" defaultValue="239" type="number" step="1" />
-        </div>
-        <div className="input-group">
-          <label>Dài (Z)</label>
-          <input id="cd" defaultValue="590" type="number" step="1" />
-        </div>
+        {CONTAINER_FIELDS.map((field) => (
+          <FieldGroup key={field.id} id={field.id} label={field.label}>
+            <input id={field.id} defaultValue={field.defaultValue} type="number" step="1" />
+          </FieldGroup>
+        ))}
       </div>
-    </div>
+    </SidebarSectionCard>
   );
-} // phần chọn loại container và nhập kích thước tùy chỉnh, giúp người dùng dễ dàng thiết lập kích thước và tải trọng của container trước khi bắt đầu xếp thùng, có thể mở rộng thêm các loại container khác nếu cần thiết
+}

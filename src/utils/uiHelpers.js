@@ -2,6 +2,27 @@ function fmt(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function formatRotationMode(mode) {
+  if (mode === 'fixed') return 'Giữ nguyên';
+  if (mode === 'upright') return 'Giữ đứng';
+  return 'Đủ 6 mặt';
+}
+
+function formatPriorityGroup(priorityGroup) {
+  return `Nhóm ${Number(priorityGroup) > 0 ? Number(priorityGroup) : 1}`;
+}
+
+function formatYesNo(value) {
+  return value ? 'Có' : 'Không';
+}
+
+function formatDeliveryZone(zone) {
+  if (zone === 'head') return 'Đầu container';
+  if (zone === 'middle') return 'Giữa container';
+  if (zone === 'door') return 'Gần cửa';
+  return 'Không cố định';
+}
+
 export function showCapacityResult(resultBox, data) {
   if (!resultBox) return;
 
@@ -90,16 +111,45 @@ export function showSelectedInfo(panel, content, box) {
   const vol = (s.w * s.h * s.d) / 1000000;
   const density = vol > 0 ? w / vol : 0;
   const label = box.userData.label || 'Không xác định';
+  const priorityGroup = box.userData.priorityGroup ?? box.userData.deliveryOrder;
+  const allowRotate = box.userData.allowRotate ?? box.userData.rotationMode !== 'fixed';
+  const noStack = box.userData.noStack ?? box.userData.fragile;
+  const noTilt = box.userData.noTilt ?? box.userData.rotationMode === 'upright';
+  const rotationMode = box.userData.rotationMode;
+  const stackLevel = box.userData.stackLevel;
+  const loadAboveKg = box.userData.loadAboveKg;
+  const supportRatio = box.userData.supportRatio;
+  const floorBearingWeight = box.userData.floorBearingWeight;
+  const floorPressureKgM2 = box.userData.floorPressureKgM2;
+  const sceneRole = box.userData.sceneRole || 'placement';
+  const previewQuantity = box.userData.previewQuantity;
+  const deliveryZone = box.userData.deliveryZone || 'any';
+  const stackLimit = box.userData.stackLimit;
+  const maxLoadAbove = box.userData.maxLoadAbove;
 
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
       <span>🆔 ID:</span><span style="font-weight:bold;">${box.userData.id}</span>
       <span>🏷️ Loại:</span><span>${label}</span>
+      <span>🎬 Chế độ scene:</span><span>${sceneRole === 'preview' ? 'Preview item' : 'Placement'}</span>
       <span>📐 Kích thước hiện tại:</span><span>${s.w} x ${s.h} x ${s.d} cm</span>
       <span>📦 Kích thước gốc:</span><span>${original.w} x ${original.h} x ${original.d} cm</span>
       <span>📦 Thể tích:</span><span>${vol.toFixed(2)} m³</span>
       <span>⚖️ Trọng lượng:</span><span>${w} kg</span>
       <span>📊 Mật độ:</span><span>${density.toFixed(1)} kg/m³</span>
+      <span>🚚 Priority group:</span><span>${formatPriorityGroup(priorityGroup)}</span>
+      <span>🚪 Delivery zone:</span><span>${formatDeliveryZone(deliveryZone)}</span>
+      <span>🔄 Allow rotate:</span><span>${formatYesNo(allowRotate)}</span>
+      <span>📏 No tilt:</span><span>${formatYesNo(noTilt)}${allowRotate ? ` (${formatRotationMode(rotationMode)})` : ''}</span>
+      <span>🧱 No stack:</span><span>${formatYesNo(noStack)}</span>
+      <span>🏗️ Stack limit:</span><span>${Number(stackLimit) > 0 ? stackLimit : 'Mở'}</span>
+      <span>🏋️ Max load above:</span><span>${Number(maxLoadAbove) > 0 ? `${Number(maxLoadAbove).toFixed(2)} kg` : 'Mở'}</span>
+      ${sceneRole === 'preview' ? `<span>🧮 Quantity preview:</span><span>${Number(previewQuantity) > 0 ? previewQuantity : 1}</span>` : ''}
+      <span>🏗️ Tầng hiện tại:</span><span>${Number(stackLevel) > 0 ? stackLevel : 1}</span>
+      <span>🧩 Mức tựa đáy:</span><span>${Number(supportRatio) > 0 ? `${(Number(supportRatio) * 100).toFixed(1)}%` : 'Đặt trực tiếp trên sàn'}</span>
+      <span>📥 Tải đang đè lên:</span><span>${Number(loadAboveKg) > 0 ? `${Number(loadAboveKg).toFixed(2)} kg` : 'Chưa có'}</span>
+      <span>🪵 Tải truyền xuống sàn:</span><span>${Number(floorBearingWeight) > 0 ? `${Number(floorBearingWeight).toFixed(2)} kg` : 'Chưa tính'}</span>
+      <span>📉 Áp suất sàn:</span><span>${Number(floorPressureKgM2) > 0 ? `${Number(floorPressureKgM2).toFixed(2)} kg/m²` : 'Chưa tính'}</span>
       <span>📍 Vị trí:</span><span>(${pos.x.toFixed(0)}, ${pos.y.toFixed(0)}, ${pos.z.toFixed(0)})</span>
     </div>
   `;
