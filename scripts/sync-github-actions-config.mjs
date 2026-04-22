@@ -1,5 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { getArgValue, isNonEmpty, mergeReleaseEnv, resolveGitHubRepoSlug } from './release-env.mjs';
+import {
+  getArgValue,
+  isNonEmpty,
+  mergeReleaseEnv,
+  resolveDeploymentMode,
+  resolveGitHubRepoSlug,
+} from './release-env.mjs';
 
 const dryRun = process.argv.includes('--dry-run');
 const fileArgs = process.argv
@@ -9,22 +15,32 @@ const fileArgs = process.argv
 const envFiles = fileArgs.length > 0 ? fileArgs : ['.env.local', '.dev.vars'];
 const releaseEnv = mergeReleaseEnv(envFiles);
 const repoSlug = resolveGitHubRepoSlug(getArgValue('--repo'));
+const deploymentMode = resolveDeploymentMode(releaseEnv);
 
-const secretKeys = [
+const coreSecretKeys = [
   'CLOUDFLARE_API_TOKEN',
   'CLOUDFLARE_ACCOUNT_ID',
   'VITE_PUBLIC_APP_URL',
   'PUBLIC_APP_URL',
   'ALLOWED_ORIGINS',
+  'PUBLIC_SECURITY_CONTACT',
+];
+
+const managedOnlySecretKeys = [
   'VITE_SUPABASE_URL',
   'VITE_SUPABASE_ANON_KEY',
-  'PUBLIC_SECURITY_CONTACT',
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'RESEND_API_KEY',
   'RESEND_FROM_EMAIL',
   'CRM_RECIPIENT_EMAIL',
 ];
+
+const optionalFreeModeSecretKeys = managedOnlySecretKeys.filter((key) => isNonEmpty(releaseEnv[key]));
+const secretKeys =
+  deploymentMode === 'managed'
+    ? [...coreSecretKeys, ...managedOnlySecretKeys]
+    : [...coreSecretKeys, ...optionalFreeModeSecretKeys];
 
 const variableEntries = {
   CLOUDFLARE_PAGES_PROJECT_NAME:
@@ -49,6 +65,7 @@ if (dryRun) {
       {
         ok: true,
         dryRun: true,
+        deploymentMode,
         repoSlug,
         envFiles,
         secretKeys,
@@ -86,6 +103,7 @@ console.log(
   JSON.stringify(
     {
       ok: true,
+      deploymentMode,
       repoSlug,
       secretKeys,
       variableEntries: Object.keys(variableEntries),

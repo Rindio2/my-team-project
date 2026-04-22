@@ -35,6 +35,7 @@ jobs:
 
       - name: Release Env Check
         env:
+          VITE_DEPLOYMENT_MODE: free
           VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
           PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
           ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS || secrets.PUBLIC_APP_URL }}
@@ -53,6 +54,7 @@ jobs:
 
       - name: E2E Release Check
         env:
+          VITE_DEPLOYMENT_MODE: free
           VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
           PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
           ALLOWED_ORIGINS: ${{ secrets.ALLOWED_ORIGINS || secrets.PUBLIC_APP_URL }}
@@ -63,6 +65,7 @@ jobs:
 
       - name: Build Release Artifact
         env:
+          VITE_DEPLOYMENT_MODE: free
           VITE_PUBLIC_APP_URL: ${{ secrets.VITE_PUBLIC_APP_URL }}
           PUBLIC_APP_URL: ${{ secrets.PUBLIC_APP_URL }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

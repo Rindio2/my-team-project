@@ -40,6 +40,10 @@ assert.ok(
   Array.isArray(packingResult.evaluatedStrategies) && packingResult.evaluatedStrategies.length > 0,
   'Smoke test yêu cầu optimizer trả về bảng so sánh chiến lược.'
 );
+assert.ok(
+  packingResult.optimizerIntelligence?.selectedStrategyId,
+  'Smoke test yêu cầu optimizer trả về optimizer intelligence cho manifest.'
+);
 
 const preflight = runCommercialPreflight({
   items: manifest,
@@ -116,6 +120,7 @@ console.log(
       packedCount: packingResult.packedCount,
       remaining: packingResult.remaining,
       strategy: packingResult.strategyLabel,
+      planningMode: packingResult.optimizerIntelligence?.planningMode,
       readinessScore: Number(commercial.score.toFixed(1)),
       preflightScore: Number(preflight.score.toFixed(1)),
     },

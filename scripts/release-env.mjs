@@ -5,6 +5,14 @@ export function isNonEmpty(value) {
   return Boolean(String(value || '').trim());
 }
 
+export function resolveDeploymentMode(env = process.env) {
+  const normalized = String(env.VITE_DEPLOYMENT_MODE || '')
+    .trim()
+    .toLowerCase();
+
+  return normalized === 'managed' ? 'managed' : 'free';
+}
+
 export function getArgValue(name) {
   const inlineArg = process.argv.find((entry) => entry.startsWith(`${name}=`));
   if (inlineArg) {

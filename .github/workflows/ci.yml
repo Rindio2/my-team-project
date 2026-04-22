@@ -11,6 +11,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
+      VITE_DEPLOYMENT_MODE: free
       VITE_PUBLIC_APP_URL: https://packet-opt-control-tower.pages.dev
       PUBLIC_APP_URL: https://packet-opt-control-tower.pages.dev
       PUBLIC_SECURITY_CONTACT: mailto:security@packet-opt.example

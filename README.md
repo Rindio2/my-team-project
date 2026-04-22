@@ -15,8 +15,9 @@
 - `AI Pro` và `Tối ưu` chạy nền bằng worker để UI không bị đứng trong lúc heuristic xử lý.
 - Xuất báo cáo HTML kiểu executive/report bàn giao cho đội vận hành hoặc khách hàng review.
 - Có bảng `Tóm tắt vận hành` để đọc nhanh KPI của phương án hiện tại.
-- Có `Cloud Workspace` với `Supabase Auth` bằng magic link và lưu/nạp snapshot phương án từ cloud.
-- Có `CRM & Report Ops` để capture lead, gửi executive report qua email và log workflow thương mại.
+- Có `free mode` mặc định để chạy hoàn toàn không tốn phí, tập trung vào luồng local: pack, preflight, export/import, report HTML.
+- Nếu cần sau này vẫn có thể bật `Cloud Workspace` với `Supabase Auth` và lưu/nạp snapshot từ cloud.
+- Nếu cần sau này vẫn có thể bật `CRM & Report Ops` để capture lead và gửi executive report qua email.
 - Có `CI` + `Cloudflare Pages auto deploy` bằng GitHub Actions.
 - Public assets (`robots`, `sitemap`, `security.txt`) được đồng bộ theo `VITE_PUBLIC_APP_URL` khi build.
 
@@ -26,6 +27,13 @@
 npm install
 npm run dev
 ```
+
+Repo này mặc định chạy `VITE_DEPLOYMENT_MODE=free`, nghĩa là:
+
+- không cần Supabase
+- không cần Resend
+- không cần CRM backend
+- vẫn dùng đầy đủ các luồng local như `AI Pro`, `Preflight`, `Save scene`, `Load scene`, `Export JSON`, `Import JSON`, `Export report HTML`
 
 Build production:
 
@@ -105,7 +113,7 @@ Soundbar,18,16,105,8,28,true,false,true,2,middle,2,24
 
 ## Free server đã chốt
 
-Repo này hiện đã được chuẩn bị theo hướng `Cloudflare Pages`:
+Repo này hiện đã được chuẩn bị theo hướng `Cloudflare Pages` miễn phí:
 
 - Static frontend chạy từ `dist`.
 - Có `Pages Functions` miễn phí tại:
@@ -125,7 +133,7 @@ npm run deploy:cloudflare
 
 Sau khi tạo project lần đầu trên Cloudflare Pages, có thể gắn custom domain riêng để chạy như bản public thương mại.
 
-## Stack thương mại đã nối
+## Stack tuỳ chọn nếu sau này cần mở rộng
 
 - Hosting + serverless: `Cloudflare Pages` + `Pages Functions`
 - Auth + cloud save: `Supabase Auth` + bảng `saved_plans`
@@ -138,12 +146,20 @@ Sau khi tạo project lần đầu trên Cloudflare Pages, có thể gắn custo
 Sao chép `.env.example` và điền:
 
 ```bash
+VITE_DEPLOYMENT_MODE=free
 VITE_PUBLIC_APP_URL=https://app.your-domain.com
 PUBLIC_APP_URL=https://app.your-domain.com
 ALLOWED_ORIGINS=https://app.your-domain.com
+PUBLIC_SECURITY_CONTACT=mailto:security@your-domain.com
+```
+
+Chỉ cần các biến ở trên là đủ để chạy bản miễn phí cho cuộc thi.
+
+Nếu sau này muốn bật cloud/email/CRM thì chuyển sang `managed` và thêm:
+
+```bash
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_ANON_KEY=...
-PUBLIC_SECURITY_CONTACT=mailto:security@your-domain.com
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=...
 RESEND_API_KEY=...
@@ -157,10 +173,12 @@ Ghi chú:
 - `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, `CRM_RECIPIENT_EMAIL` chỉ để ở Cloudflare Pages secrets/env vars.
 - `VITE_PUBLIC_APP_URL` là URL public chính thức để build `robots.txt`, `sitemap.xml` và làm redirect cho magic link auth.
 - `PUBLIC_APP_URL` hoặc `ALLOWED_ORIGINS` dùng để khóa origin cho các Pages Functions ở bản phát hành.
-- `npm run release:check-env -- --strict` sẽ fail nếu thiếu config cần cho full release MVP.
+- `VITE_DEPLOYMENT_MODE=free` là mặc định; `npm run release:check-env -- --strict` sẽ vẫn pass mà không cần Supabase hoặc Resend.
 - Copy `.dev.vars.example` thành `.dev.vars` nếu muốn `wrangler pages dev` đọc đúng runtime secrets local.
 
 ## Supabase setup
+
+Phần này là tuỳ chọn. Bỏ qua hoàn toàn nếu bạn chỉ chạy bản miễn phí cho cuộc thi.
 
 1. Tạo project Supabase.
 2. Bật `Email OTP / Magic Link` trong `Authentication`.
@@ -175,6 +193,8 @@ Các bảng chính:
 - `report_deliveries`: log mỗi lần gửi executive report.
 
 ## CRM và email workflow
+
+Phần này là tuỳ chọn. Trong `free mode`, app sẽ khóa các nút này ngay từ UI để không phát sinh chi phí dịch vụ.
 
 Endpoint mới:
 
@@ -196,16 +216,19 @@ Repo có sẵn:
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-cloudflare.yml`
 
-Secrets cần thêm trên GitHub:
+Secrets cần thêm trên GitHub cho bản `free mode`:
 
 - `CLOUDFLARE_API_TOKEN`
 - `CLOUDFLARE_ACCOUNT_ID`
 - `VITE_PUBLIC_APP_URL`
 - `PUBLIC_APP_URL`
 - `ALLOWED_ORIGINS`
+- `PUBLIC_SECURITY_CONTACT`
+
+Secrets chỉ cần thêm nếu chuyển sang `managed`:
+
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
-- `PUBLIC_SECURITY_CONTACT`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `RESEND_API_KEY`
@@ -242,12 +265,13 @@ Mapping runtime hiện tại:
 
 Nếu không set `ALLOWED_ORIGINS`, script sync sẽ fallback sang `PUBLIC_APP_URL`.
 
-## Release MVP gate
+## Release gate
 
 Từ vòng hardening này, app có thêm gate phát hành:
 
-- Frontend tự đọc `GET /api/status` để biết CRM/report capability nào đang mở.
-- Nếu backend chưa đủ env, các nút `CRM` và `Executive report` sẽ bị khóa ngay từ UI thay vì để người dùng bấm rồi fail.
+- `free mode` là mặc định và sẽ khóa `Cloud Workspace`, `CRM` và `Executive report` ngay từ UI.
+- Các luồng local vẫn mở đầy đủ để demo thực tế: pack, chỉnh tay, preflight, import/export, report HTML.
+- Nếu backend chưa đủ env, app vẫn chạy bình thường ở `free mode` thay vì fail boot.
 - Pages Functions chỉ nhận `POST` từ origin hợp lệ theo `PUBLIC_APP_URL` hoặc `ALLOWED_ORIGINS`.
 - Workflow deploy không còn phụ thuộc side effect từ `test:e2e`; nó build artifact riêng và sync runtime secrets trước khi đẩy lên Pages.
 - Có thêm checklist phát hành ở [RELEASE_CHECKLIST.md](./RELEASE_CHECKLIST.md).

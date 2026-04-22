@@ -37,7 +37,7 @@ function RuntimeLoadingOverlay({ status }) {
   const detail =
     status === 'loading'
       ? 'Three.js, optimizer, cloud workspace và các control đang được tải nền để giảm chi phí bundle đầu trang.'
-      : 'Khung ứng dụng đã sẵn sàng. Engine 3D sẽ được gọi khi trình duyệt rảnh để first paint lên nhanh hơn.';
+      : 'Khung ứng dụng đã sẵn sàng. Engine 3D sẽ tự nạp khi trình duyệt rảnh, hoặc nạp ngay khi bạn chạm vào app.';
 
   return (
     <div className="canvas-loading-overlay" role="status" aria-live="polite">
@@ -62,11 +62,19 @@ export default function App() {
 
   useEffect(() => {
     let isCancelled = false;
+    let hasStarted = false;
     let idleHandle = null;
     let timeoutHandle = null;
+    const interactionEvents = [
+      ['pointerdown', { passive: true }],
+      ['touchstart', { passive: true }],
+      ['keydown', undefined],
+    ];
 
     const loadWorkspaceController = () => {
-      if (isCancelled) return;
+      if (isCancelled || hasStarted) return;
+      hasStarted = true;
+      removeInteractionListeners();
 
       startTransition(() => {
         setRuntimeStatus('loading');
@@ -90,14 +98,29 @@ export default function App() {
         });
     };
 
+    const removeInteractionListeners = () => {
+      if (typeof window === 'undefined') return;
+
+      interactionEvents.forEach(([eventName, options]) => {
+        window.removeEventListener(eventName, loadWorkspaceController, options);
+      });
+    };
+
+    if (typeof window !== 'undefined') {
+      interactionEvents.forEach(([eventName, options]) => {
+        window.addEventListener(eventName, loadWorkspaceController, { once: true, ...options });
+      });
+    }
+
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      idleHandle = window.requestIdleCallback(loadWorkspaceController, { timeout: 1200 });
+      idleHandle = window.requestIdleCallback(loadWorkspaceController, { timeout: 700 });
     } else {
       timeoutHandle = window.setTimeout(loadWorkspaceController, 120);
     }
 
     return () => {
       isCancelled = true;
+      removeInteractionListeners();
 
       if (idleHandle !== null && 'cancelIdleCallback' in window) {
         window.cancelIdleCallback(idleHandle);
@@ -116,10 +139,10 @@ export default function App() {
   const showLoadingOverlay = runtimeStatus !== 'ready';
 
   return (
-    <div className="app-shell">
-      <Header />
+    <div className="app-shell" data-runtime-status={runtimeStatus}>
+      <Header controlsDisabled={showLoadingOverlay} />
       <div className="container-app">
-        <Sidebar />
+        <Sidebar disabled={showLoadingOverlay} />
         <main
           className={`canvas-stage ${showLoadingOverlay ? 'canvas-stage-loading' : ''}`}
           data-runtime-status={runtimeStatus}

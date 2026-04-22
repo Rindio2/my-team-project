@@ -13,6 +13,15 @@ let sharedCartonTexture = null;
 const PREVIEW_LABEL_ROLE = 'preview-label';
 const PREVIEW_OUTLINE_ROLE = 'preview-outline';
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function getSharedCartonTexture() {
   if (sharedCartonTexture) return sharedCartonTexture;
 
@@ -97,7 +106,7 @@ function createSampleDimensionLabel(
   labelDiv.style.pointerEvents = 'none';
   labelDiv.style.display = visible ? 'block' : 'none';
   labelDiv.innerHTML = `
-    <div style="color:#22c55e;font-weight:700;margin-bottom:4px;">📦 ${title}</div>
+    <div style="color:#22c55e;font-weight:700;margin-bottom:4px;">📦 ${escapeHtml(title)}</div>
     <div>SL preview: <b>${Number(previewQuantity) > 0 ? previewQuantity : 1}</b></div>
     <div>${w} × ${h} × ${d} cm</div>
     <div>${weight} kg</div>

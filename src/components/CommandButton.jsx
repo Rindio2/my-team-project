@@ -8,6 +8,7 @@ export default function CommandButton({
   title,
   fullWidth = false,
   layout = 'tile',
+  disabled = false,
   children,
 }) {
   const buttonClassName = [className, fullWidth ? 'full-width' : '', layout === 'tile' ? 'command-tile' : '']
@@ -15,7 +16,14 @@ export default function CommandButton({
     .join(' ');
 
   return (
-    <button id={id} type={type} data-command={command} className={buttonClassName} title={title}>
+    <button
+      id={id}
+      type={type}
+      data-command={command}
+      className={buttonClassName}
+      title={title}
+      disabled={disabled}
+    >
       {children || (
         <>
           <span className="command-tile-label">{label}</span>

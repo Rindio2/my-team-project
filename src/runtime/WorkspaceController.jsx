@@ -35,6 +35,7 @@ import {
   showPackingReport,
   showSelectedInfo,
 } from '../utils/uiHelpers.js';
+import { isFreeDeploymentMode } from '../utils/deploymentMode.js';
 
 import { createSceneSystem } from '../three/initScene.js';
 import {
@@ -290,40 +291,45 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       const { scene, camera, renderer, orbit, transformControl, stars, cogMarker } = sceneSys;
       transformControl.visible = false;
       transformControl.enabled = false;
+      const freeModeEnabled = isFreeDeploymentMode();
 
-    const containerSys = createContainerGroup();
-    scene.add(containerSys.group);
+      const SIDEBAR_COLLAPSED_STORAGE_KEY = 'packet-opt-sidebar-collapsed';
+      const containerSys = createContainerGroup();
+      scene.add(containerSys.group);
 
-    let boxes = [];
-    let selected = null;
-    let animationId;
-    let resizeObserver;
-    let lastCapacityData = null;
-    let isApplyingSceneState = false;
-    let transformSnapshotBeforeDrag = null;
-    let historyPast = [];
-    let historyFuture = [];
-    let lastWorkspaceMode = 'preview';
-    let lastWorkspaceAction = 'Sẵn sàng dựng phương án xếp hàng.';
-    let lastWorkspaceResult = null;
-    let lastWorkspaceUpdatedAt = new Date();
-    let optimizerJobSeq = 0;
-    let optimizerIsRunning = false;
-    let activeOptimizerWorker = null;
-    let authSession = null;
-    let activeCloudPlanId = null;
-    let cloudPlansCache = [];
-    let cloudRuntimeInitialized = false;
-    let platformStatus = {
-      checked: false,
-      available: false,
-      capabilities: {},
-      release: {
-        ready: false,
-        issues: [],
-      },
-    };
-    let removeAuthSubscription = () => {};
+      let boxes = [];
+      let selected = null;
+      let animationId;
+      let resizeObserver;
+      let lastCapacityData = null;
+      let isApplyingSceneState = false;
+      let transformSnapshotBeforeDrag = null;
+      let historyPast = [];
+      let historyFuture = [];
+      let lastWorkspaceMode = 'preview';
+      let lastWorkspaceAction = 'Sẵn sàng dựng phương án xếp hàng.';
+      let lastWorkspaceResult = null;
+      let lastWorkspaceUpdatedAt = new Date();
+      let optimizerJobSeq = 0;
+      let optimizerIsRunning = false;
+      let activeOptimizerWorker = null;
+      let authSession = null;
+      let activeCloudPlanId = null;
+      let cloudPlansCache = [];
+      let cloudRuntimeInitialized = false;
+      let sidebarCollapsedPreference =
+        typeof window !== 'undefined' &&
+        window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1';
+      let platformStatus = {
+        checked: false,
+        available: false,
+        capabilities: {},
+        release: {
+          ready: false,
+          issues: [],
+        },
+      };
+      let removeAuthSubscription = () => {};
 
     let multiBoxTypes = [
       {
@@ -384,6 +390,52 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+    }
+
+    function sanitizeInlineStatusHtml(value) {
+      return escapeHtml(value)
+        .replaceAll('&lt;b&gt;', '<b>')
+        .replaceAll('&lt;/b&gt;', '</b>')
+        .replaceAll('&lt;br&gt;', '<br>')
+        .replaceAll('&lt;br/&gt;', '<br/>')
+        .replaceAll('&lt;code&gt;', '<code>')
+        .replaceAll('&lt;/code&gt;', '</code>');
+    }
+
+    function syncSidebarToggleButtons(isCollapsed) {
+      const expanded = !isCollapsed;
+
+      getCommandButtons('toggle-sidebar').forEach((button) => {
+        button.setAttribute('aria-expanded', String(expanded));
+        button.setAttribute(
+          'aria-label',
+          expanded ? 'Thu gọn hoặc mở rộng sidebar' : 'Mở rộng sidebar'
+        );
+        button.title = expanded ? 'Thu gọn sidebar' : 'Mở rộng sidebar';
+        button.classList.toggle('active', isCollapsed);
+      });
+    }
+
+    function applySidebarCollapsedState(nextCollapsed, { persist = true, refitCamera = false } = {}) {
+      sidebarCollapsedPreference = Boolean(nextCollapsed);
+      const shouldCollapse = sidebarCollapsedPreference;
+
+      sidebarEl?.classList.toggle('collapsed', shouldCollapse);
+      syncSidebarToggleButtons(shouldCollapse);
+
+      if (persist && typeof window !== 'undefined') {
+        window.localStorage.setItem(
+          SIDEBAR_COLLAPSED_STORAGE_KEY,
+          sidebarCollapsedPreference ? '1' : '0'
+        );
+      }
+
+      if (refitCamera) {
+        window.setTimeout(() => {
+          sceneSys.resize();
+          sceneSys.fitCameraToBox(+cw.value, +ch.value, +cd.value);
+        }, 310);
+      }
     }
 
     function isValidEmail(value) {
@@ -548,15 +600,20 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
         : [];
 
       return {
-        checked: Boolean(platformStatus?.checked),
-        available: Boolean(platformStatus?.available),
-        canSubmitLead: Boolean(capabilities.crmLeadPersist || capabilities.crmLeadNotify),
-        canSendReport: Boolean(capabilities.reportEmail),
-        canPersistLead: Boolean(capabilities.crmLeadPersist),
-        canNotifyLead: Boolean(capabilities.crmLeadNotify),
-        canLogReport: Boolean(capabilities.reportLog),
-        releaseReady: Boolean(platformStatus?.release?.ready),
-        releaseIssues,
+        checked: freeModeEnabled || Boolean(platformStatus?.checked),
+        available: freeModeEnabled ? true : Boolean(platformStatus?.available),
+        canSubmitLead: freeModeEnabled
+          ? false
+          : Boolean(capabilities.crmLeadPersist || capabilities.crmLeadNotify),
+        canSendReport: freeModeEnabled ? false : Boolean(capabilities.reportEmail),
+        canPersistLead: freeModeEnabled ? false : Boolean(capabilities.crmLeadPersist),
+        canNotifyLead: freeModeEnabled ? false : Boolean(capabilities.crmLeadNotify),
+        canLogReport: freeModeEnabled ? false : Boolean(capabilities.reportLog),
+        releaseReady: freeModeEnabled ? true : Boolean(platformStatus?.release?.ready),
+        releaseIssues: freeModeEnabled
+          ? ['Free mode đang bật: CRM, email workflow và cloud sync đã được tắt có chủ đích.']
+          : releaseIssues,
+        isFreeMode: freeModeEnabled,
       };
     }
 
@@ -753,6 +810,18 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     function renderPlatformStatusCard() {
       const capabilityState = getPlatformCapabilityState();
 
+      if (capabilityState.isFreeMode) {
+        setStatusCard(crmStatus, {
+          tone: 'neutral',
+          title: 'Free mode: CRM và email tự động đã tắt',
+          lines: [
+            'Bản thi hiện chỉ giữ các luồng local để không phát sinh chi phí dịch vụ.',
+            'Dùng Export HTML để bàn giao report và ghi lead thủ công nếu cần follow-up.',
+          ],
+        });
+        return;
+      }
+
       if (!platformStatus.checked) {
         setStatusCard(crmStatus, {
           tone: 'neutral',
@@ -807,6 +876,23 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function refreshPlatformStatus({ silent = false } = {}) {
+      if (freeModeEnabled) {
+        platformStatus = {
+          checked: true,
+          available: true,
+          capabilities: {},
+          release: {
+            ready: true,
+            issues: ['Free mode giữ app ở local-only để không cần Supabase, Resend hay CRM backend.'],
+          },
+        };
+        updatePlatformCommandAvailability();
+        if (!silent) {
+          renderPlatformStatusCard();
+        }
+        return platformStatus;
+      }
+
       try {
         const { getPlatformStatus } = await loadPlatformApiModule();
         const status = await getPlatformStatus();
@@ -841,6 +927,17 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     function updateCloudCommandAvailability() {
+      if (freeModeEnabled) {
+        setCommandButtonsDisabled(
+          ['auth-send-link', 'auth-sign-out', 'cloud-refresh-plans', 'cloud-load-plan', 'cloud-save-plan'],
+          true
+        );
+        if (authEmail) authEmail.disabled = true;
+        if (cloudPlanName) cloudPlanName.disabled = true;
+        if (cloudPlanList) cloudPlanList.disabled = true;
+        return;
+      }
+
       const configured = isSupabaseConfigured();
       const signedIn = Boolean(authSession?.user);
 
@@ -857,6 +954,10 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     function hasPendingCloudAuthRedirect() {
+      if (freeModeEnabled) {
+        return false;
+      }
+
       const { hash = '', search = '' } = window.location;
       const combined = `${search}${hash}`;
 
@@ -865,8 +966,37 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       );
     }
 
+    function renderFreeModeCloudCards() {
+      if (authStatus) {
+        setStatusCard(authStatus, {
+          tone: 'neutral',
+          title: 'Free mode: cloud auth đã tắt',
+          lines: [
+            'Bản thi hiện không dùng Supabase để tránh chi phí vận hành.',
+            'Nếu cần chia sẻ phương án, hãy dùng Export JSON hoặc Export HTML.',
+          ],
+        });
+      }
+
+      if (cloudPlanStatus) {
+        setStatusCard(cloudPlanStatus, {
+          tone: 'neutral',
+          title: 'Free mode: cloud save đã tắt',
+          lines: [
+            'Dùng Save scene để lưu trên máy hiện tại.',
+            'Dùng Export JSON và Import JSON để chuyển scene giữa các máy.',
+          ],
+        });
+      }
+    }
+
     function renderCloudPlanStatus(plan = null) {
       if (!cloudPlanStatus) return;
+
+      if (freeModeEnabled) {
+        renderFreeModeCloudCards();
+        return;
+      }
 
       if (!plan) {
         setStatusCard(cloudPlanStatus, {
@@ -898,6 +1028,18 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     function renderCloudPlanList(plans = [], { preserveSelection = true } = {}) {
       if (!cloudPlanList) return;
 
+      if (freeModeEnabled) {
+        cloudPlanList.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Free mode: dùng Save scene hoặc Export JSON';
+        cloudPlanList.appendChild(option);
+        cloudPlanList.value = '';
+        activeCloudPlanId = null;
+        renderCloudPlanStatus(null);
+        return;
+      }
+
       const previousSelection = preserveSelection ? activeCloudPlanId || cloudPlanList.value : null;
       cloudPlanList.innerHTML = '';
 
@@ -928,6 +1070,13 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function refreshCloudPlans({ preserveSelection = true, silent = false } = {}) {
+      if (freeModeEnabled) {
+        cloudPlansCache = [];
+        renderCloudPlanList([]);
+        updateCloudCommandAvailability();
+        return [];
+      }
+
       if (!isSupabaseConfigured()) {
         cloudPlansCache = [];
         renderCloudPlanList([]);
@@ -972,6 +1121,15 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function activateCloudWorkspace({ syncSession = true, silent = false } = {}) {
+      if (freeModeEnabled) {
+        authSession = null;
+        cloudPlansCache = [];
+        renderCloudPlanList([]);
+        renderFreeModeCloudCards();
+        updateCloudCommandAvailability();
+        return null;
+      }
+
       if (!isSupabaseConfigured()) {
         updateCloudCommandAvailability();
         return null;
@@ -1015,6 +1173,15 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function syncAuthSession({ silent = false } = {}) {
+      if (freeModeEnabled) {
+        authSession = null;
+        cloudPlansCache = [];
+        renderCloudPlanList([]);
+        renderFreeModeCloudCards();
+        updateCloudCommandAvailability();
+        return null;
+      }
+
       if (!isSupabaseConfigured()) {
         authSession = null;
         cloudPlansCache = [];
@@ -1075,6 +1242,11 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function handleSendMagicLink() {
+      if (freeModeEnabled) {
+        renderFreeModeCloudCards();
+        return;
+      }
+
       if (!isSupabaseConfigured()) {
         setStatusCard(authStatus, {
           tone: 'warning',
@@ -1115,6 +1287,11 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function handleSignOutCloud() {
+      if (freeModeEnabled) {
+        renderFreeModeCloudCards();
+        return;
+      }
+
       await activateCloudWorkspace({ syncSession: false, silent: true });
 
       if (!authSession?.user) {
@@ -1148,6 +1325,11 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function handleRefreshCloudPlans() {
+      if (freeModeEnabled) {
+        renderFreeModeCloudCards();
+        return;
+      }
+
       await activateCloudWorkspace({ syncSession: true, silent: false });
 
       if (!authSession?.user) {
@@ -1158,6 +1340,11 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function handleCloudSavePlan() {
+      if (freeModeEnabled) {
+        renderFreeModeCloudCards();
+        return;
+      }
+
       await activateCloudWorkspace({ syncSession: true, silent: true });
 
       if (!authSession?.user) {
@@ -1225,6 +1412,11 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     async function handleCloudLoadPlan() {
+      if (freeModeEnabled) {
+        renderFreeModeCloudCards();
+        return;
+      }
+
       await activateCloudWorkspace({ syncSession: true, silent: true });
 
       if (!authSession?.user) {
@@ -1420,8 +1612,8 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
         SCENARIO_PRESETS.find((item) => item.id === projectPreset?.value) || SCENARIO_PRESETS[0];
 
       projectPresetHint.innerHTML = `
-        <b>${preset.label}</b><br/>
-        ${preset.description}
+        <b>${escapeHtml(preset.label)}</b><br/>
+        ${escapeHtml(preset.description)}
       `;
     }
 
@@ -1753,6 +1945,18 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
               )
               .join('')
           : '<div style="color:#86efac;">Không có cảnh báo lớn. Manifest đang khá sạch để đi tiếp.</div>';
+      const optimizerAdviceHtml = preflight.optimizerAdvice
+        ? `
+          <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(14,116,144,0.10);border:1px solid rgba(34,211,238,0.28);color:#cffafe;line-height:1.65;">
+            <div style="font-weight:700;color:#67e8f9;margin-bottom:8px;">🤖 Optimizer advisor</div>
+            <div><b>Planning mode:</b> ${preflight.optimizerAdvice.planningMode}</div>
+            <div><b>Chiến lược ưu tiên:</b> ${preflight.optimizerAdvice.primaryStrategyLabel}</div>
+            <div><b>Độ tự tin:</b> ${preflight.optimizerAdvice.confidence}%</div>
+            <div style="margin-top:8px;">${preflight.optimizerAdvice.headline}</div>
+            <div style="margin-top:8px;">${preflight.optimizerAdvice.rationale.map((item) => `• ${item}`).join('<br/>')}</div>
+          </div>
+        `
+        : '';
 
       reportEl.innerHTML = `
         <div style="color:#38bdf8;font-size:1.1rem;font-weight:bold;margin-bottom:8px;">
@@ -1795,6 +1999,8 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
         <div style="display:grid;gap:8px;margin-top:12px;">
           ${alertHtml}
         </div>
+
+        ${optimizerAdviceHtml}
 
         <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(16,185,129,0.10);border:1px solid rgba(52,211,153,0.28);color:#d1fae5;line-height:1.65;">
           <div style="font-weight:700;color:#86efac;margin-bottom:8px;">Khuyến nghị tiếp theo</div>
@@ -2495,7 +2701,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
 
       const { size, label, id } = selected.userData;
       manualArrangeStatus.innerHTML = `
-        <b>Đang chọn:</b> ${label || 'Thùng'} #${id}<br/>
+        <b>Đang chọn:</b> ${escapeHtml(label || 'Thùng')} #${id}<br/>
         <span>Kích thước hiện tại: ${size.w} × ${size.h} × ${size.d} cm</span><br/>
         <span>Chế độ: <b>${isRotateMode ? 'Lật' : 'Di chuyển'}</b></span>
       `;
@@ -2632,10 +2838,10 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
 
       reportEl.innerHTML = `
         <div style="color:${color};font-size:1.05rem;font-weight:bold;margin-bottom:8px;">
-          ${title}
+          ${sanitizeInlineStatusHtml(title)}
         </div>
         <div style="display:grid;gap:6px;padding:12px;border-radius:10px;background:${background};border:1px solid ${border};line-height:1.6;">
-          ${lines.map((line) => `<div>${line}</div>`).join('')}
+          ${lines.map((line) => `<div>${sanitizeInlineStatusHtml(line)}</div>`).join('')}
         </div>
       `;
       reportEl.style.display = 'block';
@@ -2659,7 +2865,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div>Tên item:</div>
-          <div style="text-align:right;font-weight:bold;">${singleBox.label}</div>
+          <div style="text-align:right;font-weight:bold;">${escapeHtml(singleBox.label)}</div>
 
           <div>Số lượng box units:</div>
           <div style="text-align:right;font-weight:bold;">${singleBox.qty}</div>
@@ -2767,11 +2973,10 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     function toggleSidebarPanel() {
-      sidebarEl?.classList.toggle('collapsed');
-      setTimeout(() => {
-        sceneSys.resize();
-        sceneSys.fitCameraToBox(+cw.value, +ch.value, +cd.value);
-      }, 310);
+      applySidebarCollapsedState(!sidebarCollapsedPreference, {
+        persist: true,
+        refitCamera: true,
+      });
     }
 
     function setSelectedBox(box) {
@@ -3106,7 +3311,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
 
       const containerVol = +cw.value * +ch.value * +cd.value;
       const perc = containerVol > 0 ? ((vol / containerVol) * 100).toFixed(1) : '0.0';
-      statsEl.innerHTML = `${count} thùng | ${perc}% | ${(totalWeight / 1000).toFixed(1)} tấn`;
+      statsEl.textContent = `${count} thùng | ${perc}% | ${(totalWeight / 1000).toFixed(1)} tấn`;
 
       if (totalWeight > 0) {
         combinedPos.divideScalar(totalWeight);
@@ -3821,7 +4026,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
           <div class="dimension-inputs">
             <div class="input-group">
               <label>Tên item</label>
-              <input data-field="label" value="${normalized.label || `Item ${index + 1}`}" />
+              <input data-field="label" value="${escapeHtml(normalized.label || `Item ${index + 1}`)}" />
             </div>
             <div class="input-group">
               <label>Số lượng</label>
@@ -4196,7 +4401,8 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
                   .map(
                     (strategy) => `
                       <div style="padding:8px 10px;border-radius:8px;background:${strategy.id === result.strategyId ? 'rgba(34,197,94,0.14)' : 'rgba(255,255,255,0.04)'};border:1px solid ${strategy.id === result.strategyId ? 'rgba(74,222,128,0.35)' : 'rgba(148,163,184,0.12)'};">
-                        <b>${strategy.label}</b>: ${strategy.packedCount} thùng, ${strategy.efficiency.toFixed(2)}% thể tích, lệch ngang ${strategy.sideImbalancePercent.toFixed(2)}%, lệch dọc ${strategy.lengthImbalancePercent.toFixed(2)}%
+                        <b>#${strategy.dispatchRank || '-'} ${strategy.label}</b>: ${strategy.packedCount} thùng, ${strategy.efficiency.toFixed(2)}% thể tích, lệch ngang ${strategy.sideImbalancePercent.toFixed(2)}%, lệch dọc ${strategy.lengthImbalancePercent.toFixed(2)}%
+                        ${strategy.dispatchReason ? `<div style="margin-top:4px;color:#a7f3d0;">${strategy.dispatchReason}</div>` : ''}
                       </div>
                     `
                   )
@@ -4205,6 +4411,19 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
             </div>
           `
           : '';
+      const optimizerIntelligenceHtml = result.optimizerIntelligence
+        ? `
+          <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(8,145,178,0.10);border:1px solid rgba(34,211,238,0.28);line-height:1.65;color:#cffafe;">
+            <div style="font-weight:700;color:#67e8f9;margin-bottom:8px;">🤖 Optimizer intelligence</div>
+            <div><b>Planning mode:</b> ${result.optimizerIntelligence.planningMode}</div>
+            <div><b>Advisor confidence:</b> ${result.optimizerIntelligence.confidence}%</div>
+            <div><b>Advisor primary strategy:</b> ${result.optimizerIntelligence.primaryStrategyLabel}</div>
+            <div style="margin-top:8px;"><b>Nhánh được chọn thực tế:</b> ${result.optimizerIntelligence.selectedStrategyLabel}</div>
+            <div style="margin-top:8px;">${result.optimizerIntelligence.selectionReason}</div>
+            <div style="margin-top:8px;">${result.optimizerIntelligence.rationale.map((item) => `• ${item}`).join('<br/>')}</div>
+          </div>
+        `
+        : '';
       const commercialHtml = `
         <div style="margin-top:12px;padding:12px;border-radius:10px;background:rgba(15,23,42,0.72);border:1px solid rgba(16,185,129,0.26);line-height:1.65;color:#d1fae5;">
           <div style="font-weight:700;color:#86efac;margin-bottom:8px;">💼 Commercial intelligence</div>
@@ -4313,6 +4532,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
         </div>
 
         ${strategiesHtml}
+        ${optimizerIntelligenceHtml}
         ${commercialHtml}
         ${warningHtml}
         ${rejectedSpaceHtml}
@@ -4922,9 +5142,9 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     }
 
     applyCommercialSettings();
-    renderPlatformStatusCard();
-    updatePlatformCommandAvailability();
     void refreshPlatformStatus({ silent: false });
+    updatePlatformCommandAvailability();
+    renderCloudPlanList([]);
     updateCloudCommandAvailability();
     if (hasPendingCloudAuthRedirect()) {
       void activateCloudWorkspace({ syncSession: true, silent: true });
@@ -4934,6 +5154,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
     syncCapacityInputs();
     renderMultiBoxTypes();
     renderPreviewItemsScene();
+    applySidebarCollapsedState(sidebarCollapsedPreference, { persist: false });
     sceneSys.resize();
     syncManualArrangePanel();
     updateViewerStatus();
@@ -5049,9 +5270,14 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       bindCommandButtons('toggle-sidebar', toggleSidebarPanel),
     ];
 
+    const handleViewportResize = () => {
+      sceneSys.resize();
+      applySidebarCollapsedState(sidebarCollapsedPreference, { persist: false });
+    };
+
     resizeObserver = new ResizeObserver(() => sceneSys.resize());
     resizeObserver.observe(canvasDiv);
-    window.addEventListener('resize', sceneSys.resize);
+    window.addEventListener('resize', handleViewportResize);
 
     function animate() {
       animationId = requestAnimationFrame(animate);
@@ -5080,7 +5306,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       activeOptimizerWorker?.terminate();
       activeOptimizerWorker = null;
       cancelAnimationFrame(animationId);
-      window.removeEventListener('resize', sceneSys.resize);
+      window.removeEventListener('resize', handleViewportResize);
       window.removeEventListener('keydown', handleKeyDown);
       resizeObserver?.disconnect();
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown, true);

@@ -2,6 +2,15 @@ function fmt(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 function formatRotationMode(mode) {
   if (mode === 'fixed') return 'Giữ nguyên';
   if (mode === 'upright') return 'Giữ đứng';
@@ -30,7 +39,7 @@ export function showCapacityResult(resultBox, data) {
     resultBox.style.display = 'block';
     resultBox.innerHTML = `
       <div style="color:#f87171;font-weight:bold;">❌ Dữ liệu không hợp lệ</div>
-      <div>${data.message}</div>
+      <div>${escapeHtml(data.message)}</div>
     `;
     return;
   }
@@ -130,18 +139,18 @@ export function showSelectedInfo(panel, content, box) {
   content.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
       <span>🆔 ID:</span><span style="font-weight:bold;">${box.userData.id}</span>
-      <span>🏷️ Loại:</span><span>${label}</span>
+      <span>🏷️ Loại:</span><span>${escapeHtml(label)}</span>
       <span>🎬 Chế độ scene:</span><span>${sceneRole === 'preview' ? 'Preview item' : 'Placement'}</span>
       <span>📐 Kích thước hiện tại:</span><span>${s.w} x ${s.h} x ${s.d} cm</span>
       <span>📦 Kích thước gốc:</span><span>${original.w} x ${original.h} x ${original.d} cm</span>
       <span>📦 Thể tích:</span><span>${vol.toFixed(2)} m³</span>
       <span>⚖️ Trọng lượng:</span><span>${w} kg</span>
       <span>📊 Mật độ:</span><span>${density.toFixed(1)} kg/m³</span>
-      <span>🚚 Priority group:</span><span>${formatPriorityGroup(priorityGroup)}</span>
-      <span>🚪 Delivery zone:</span><span>${formatDeliveryZone(deliveryZone)}</span>
-      <span>🔄 Allow rotate:</span><span>${formatYesNo(allowRotate)}</span>
-      <span>📏 No tilt:</span><span>${formatYesNo(noTilt)}${allowRotate ? ` (${formatRotationMode(rotationMode)})` : ''}</span>
-      <span>🧱 No stack:</span><span>${formatYesNo(noStack)}</span>
+      <span>🚚 Priority group:</span><span>${escapeHtml(formatPriorityGroup(priorityGroup))}</span>
+      <span>🚪 Delivery zone:</span><span>${escapeHtml(formatDeliveryZone(deliveryZone))}</span>
+      <span>🔄 Allow rotate:</span><span>${escapeHtml(formatYesNo(allowRotate))}</span>
+      <span>📏 No tilt:</span><span>${escapeHtml(formatYesNo(noTilt))}${allowRotate ? ` (${escapeHtml(formatRotationMode(rotationMode))})` : ''}</span>
+      <span>🧱 No stack:</span><span>${escapeHtml(formatYesNo(noStack))}</span>
       <span>🏗️ Stack limit:</span><span>${Number(stackLimit) > 0 ? stackLimit : 'Mở'}</span>
       <span>🏋️ Max load above:</span><span>${Number(maxLoadAbove) > 0 ? `${Number(maxLoadAbove).toFixed(2)} kg` : 'Mở'}</span>
       ${sceneRole === 'preview' ? `<span>🧮 Quantity preview:</span><span>${Number(previewQuantity) > 0 ? previewQuantity : 1}</span>` : ''}

@@ -7,7 +7,7 @@ const NAVIGABLE_SIDEBAR_SECTIONS = SIDEBAR_SECTIONS.filter(
   (section) => section.showInMap !== false
 );
 
-export default function Sidebar() {
+export default function Sidebar({ disabled = false }) {
   const sidebarRef = useRef(null);
   const [activeSectionId, setActiveSectionId] = useState(NAVIGABLE_SIDEBAR_SECTIONS[0].id);
 
@@ -68,7 +68,12 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="sidebar" id="sidebar" ref={sidebarRef}>
+    <aside
+      className={`sidebar ${disabled ? 'sidebar-booting' : ''}`}
+      id="sidebar"
+      ref={sidebarRef}
+      aria-busy={disabled}
+    >
       <SidebarWorkspaceMap
         sections={NAVIGABLE_SIDEBAR_SECTIONS}
         activeSectionId={activeSectionId}

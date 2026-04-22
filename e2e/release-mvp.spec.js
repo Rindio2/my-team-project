@@ -1,31 +1,36 @@
 import { expect, test } from '@playwright/test';
 
-test('release shell renders and capability gates match backend status', async ({ page, request }) => {
-  const statusResponse = await request.get('/api/status');
-  expect(statusResponse.ok()).toBeTruthy();
-  const status = await statusResponse.json();
-
+test('release shell renders and free mode locks cloud and crm actions', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByText('Packet Opt Control Tower')).toBeVisible();
   await expect(page.getByText('Workspace map')).toBeVisible();
   await expect(page.locator('#canvas')).toBeVisible();
 
+  await page.locator('#cloudWorkspaceSection > summary').click();
+  await expect(page.getByText(/Free mode: cloud auth đã tắt/i)).toBeVisible();
+
+  await page.locator('#crmSection > summary').click();
+  await expect(page.getByText(/Free mode: CRM và email tự động đã tắt/i)).toBeVisible();
+
   await page.getByRole('button', { name: /Commercial/i }).click();
   await expect(page.locator('#commercialProjectName')).toBeVisible();
 
-  const canSubmitLead = Boolean(
-    status.capabilities?.crmLeadPersist || status.capabilities?.crmLeadNotify
-  );
-  const canSendReport = Boolean(status.capabilities?.reportEmail);
-
   await expect(page.locator('[data-command="crm-submit-lead"]').first()).toHaveJSProperty(
     'disabled',
-    !canSubmitLead
+    true
   );
   await expect(page.locator('[data-command="crm-send-report"]').first()).toHaveJSProperty(
     'disabled',
-    !canSendReport
+    true
+  );
+  await expect(page.locator('[data-command="auth-send-link"]').first()).toHaveJSProperty(
+    'disabled',
+    true
+  );
+  await expect(page.locator('[data-command="cloud-save-plan"]').first()).toHaveJSProperty(
+    'disabled',
+    true
   );
 });
 

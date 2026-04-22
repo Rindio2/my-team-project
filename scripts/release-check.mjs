@@ -1,5 +1,8 @@
 const args = new Set(process.argv.slice(2));
 const strictMode = args.has('--strict');
+const deploymentMode = String(process.env.VITE_DEPLOYMENT_MODE || 'free')
+  .trim()
+  .toLowerCase();
 
 function isNonEmpty(value) {
   return Boolean(String(value || '').trim());
@@ -163,19 +166,26 @@ optionalCapabilityChecks.forEach((check) => {
 });
 
 if (strictMode) {
-  optionalCapabilityChecks.forEach((check) => {
-    const missing = check.fields
-      .map((field) => field.key)
-      .filter((field) => !isNonEmpty(process.env[field]));
-    if (missing.length > 0) {
-      errors.push(`${check.name}: strict release yêu cầu thêm ${missing.join(', ')}.`);
-    }
-  });
+  if (!['free', 'managed'].includes(deploymentMode)) {
+    errors.push('VITE_DEPLOYMENT_MODE chỉ chấp nhận free hoặc managed.');
+  }
+
+  if (deploymentMode === 'managed') {
+    optionalCapabilityChecks.forEach((check) => {
+      const missing = check.fields
+        .map((field) => field.key)
+        .filter((field) => !isNonEmpty(process.env[field]));
+      if (missing.length > 0) {
+        errors.push(`${check.name}: strict release yêu cầu thêm ${missing.join(', ')}.`);
+      }
+    });
+  }
 }
 
 const summary = {
   ok: errors.length === 0,
   strictMode,
+  deploymentMode: ['free', 'managed'].includes(deploymentMode) ? deploymentMode : 'free',
   core: Object.fromEntries(coreChecks.map((check) => [check.key, Boolean(process.env[check.key])])),
   routing: {
     ALLOWED_ORIGINS: Boolean(process.env.ALLOWED_ORIGINS),

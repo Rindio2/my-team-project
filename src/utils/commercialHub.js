@@ -8,6 +8,7 @@ export const DEFAULT_COMMERCIAL_SETTINGS = {
   targetUtilization: 82,
   targetMaxImbalance: 12,
 };
+import { analyzeOptimizerManifest } from './optimizerIntelligence.js';
 
 const SERVICE_LEVELS = {
   economy: {
@@ -179,6 +180,12 @@ export function runCommercialPreflight({
     containerVolumeCm3 > 0 ? counts.requestedVolumeCm3 / containerVolumeCm3 : 0;
   const requestedWeightRatio =
     Number.isFinite(maxWeight) && maxWeight > 0 ? counts.requestedWeightKg / maxWeight : 0;
+  const optimizerAdvice = analyzeOptimizerManifest({
+    container,
+    boxTypes: validItems,
+    maxWeight,
+    floorLoadLimit,
+  });
 
   const alerts = [];
 
@@ -233,6 +240,14 @@ export function runCommercialPreflight({
     });
   }
 
+  if (optimizerAdvice.profile.floorPressureDemandRatio >= 0.45) {
+    alerts.push({
+      severity: 'warning',
+      title: 'Manifest co dau hieu ap luc tai san cao',
+      detail: 'Nen uu tien heuristic on dinh nen chiu tai va review max floor pressure sau khi pack.',
+    });
+  }
+
   let score = 100;
   score -= Math.max(0, requestedVolumeRatio - 0.9) * 70;
   score -= Math.max(0, requestedWeightRatio - 0.88) * 80;
@@ -261,6 +276,9 @@ export function runCommercialPreflight({
   if (counts.zonedSkuCount > 0 || counts.controlledSkuCount > 0) {
     recommendations.push('Su dung delivery zone va stack control de phan tach hang uu tien / hang de vo.');
   }
+  if (optimizerAdvice.recommendations[0]) {
+    recommendations.push(optimizerAdvice.recommendations[0]);
+  }
 
   if (recommendations.length === 0) {
     recommendations.push('Manifest dang sach. Co the bat dau toi uu va xuat report cho khach hang.');
@@ -285,6 +303,7 @@ export function runCommercialPreflight({
       targetUtilization: normalizedSettings.targetUtilization,
       targetMaxImbalance: normalizedSettings.targetMaxImbalance,
     },
+    optimizerAdvice,
   };
 }
 
@@ -337,6 +356,7 @@ export function analyzeCommercialPlan({
       ? clamp(100 - (lengthImbalancePercent / imbalanceTarget) * 55, 0, 100)
       : 100;
   const overlapPenalty = result?.strictOverlapDetected ? 35 : 0;
+  const optimizerAdvice = result?.optimizerIntelligence || preflight.optimizerAdvice;
   const remainingPenalty =
     counts.totalUnits > 0 ? Math.min(26, (remainingCount / counts.totalUnits) * 42) : 0;
 
@@ -390,6 +410,9 @@ export function analyzeCommercialPlan({
     if (result?.strictOverlapDetected) {
       recommendations.push('Phat hien giao nhau. Layout can duoc sua truoc khi coi la san sang giao hang.');
     }
+    if (optimizerAdvice?.selectionReason) {
+      recommendations.push(optimizerAdvice.selectionReason);
+    }
     if (recommendations.length === 0) {
       recommendations.push('Phuong an da kha dep de quote, xuat report va ban giao cho doi van hanh.');
     }
@@ -435,5 +458,6 @@ export function analyzeCommercialPlan({
       maxImbalance: normalizedSettings.targetMaxImbalance,
     },
     preflight,
+    optimizerAdvice,
   };
 }

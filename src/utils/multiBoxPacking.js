@@ -1,11 +1,12 @@
 import { compactPlacedLayout } from './layoutCompactor.js';
+import { analyzeOptimizerManifest } from './optimizerIntelligence.js';
 
 const EPSILON = 0.0001;
 const CONTACT_EPSILON = 0.000001;
 const FACE_SNAP_TOLERANCE = 1.25;
 const MIN_SUPPORT_RATIO = 0.78;
 const PACKING_ALGORITHM_LABEL =
-  'Extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
+  'Manifest-aware strategy dispatch + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
 
 function resolveStackLimit(rawLimit) {
   const value = Number(rawLimit);
@@ -1803,10 +1804,18 @@ function updateCandidatePoints(points, placement, placed, container, pointSortMo
   );
 }
 
-function buildStrategyRunsSummary(results) {
+function buildStrategyRunsSummary(results, intelligence) {
+  const planById = new Map(
+    Array.isArray(intelligence?.strategyPlans)
+      ? intelligence.strategyPlans.map((plan) => [plan.id, plan])
+      : []
+  );
+
   return results.map((result) => ({
     id: result.strategyId,
     label: result.strategyLabel,
+    dispatchRank: planById.get(result.strategyId)?.dispatchRank || null,
+    dispatchReason: planById.get(result.strategyId)?.dispatchReason || '',
     packedCount: result.packedCount,
     remaining: result.remaining,
     efficiency: result.efficiency,
@@ -1815,6 +1824,32 @@ function buildStrategyRunsSummary(results) {
     lengthImbalancePercent: result.loadBalance.lengthImbalancePercent,
     rejectedByConstraintCount: result.rejectedByConstraintCount,
   }));
+}
+
+function buildOptimizerSelectionReason(bestResult, intelligence) {
+  if (!bestResult || !intelligence?.primaryStrategyId) {
+    return '';
+  }
+
+  if (bestResult.strategyId === intelligence.primaryStrategyId) {
+    return `Manifest advisor va ket qua heuristic deu chon ${bestResult.strategyLabel}.`;
+  }
+
+  return `Manifest advisor de xuat ${intelligence.primaryStrategyLabel} truoc, nhung ${bestResult.strategyLabel} dat ket qua thuc te tot hon tren layout nay.`;
+}
+
+function buildOptimizerIntelligence(bestResult, intelligence) {
+  if (!intelligence) {
+    return null;
+  }
+
+  return {
+    ...intelligence,
+    selectedStrategyId: bestResult?.strategyId || intelligence.primaryStrategyId,
+    selectedStrategyLabel: bestResult?.strategyLabel || intelligence.primaryStrategyLabel,
+    selectionReason: buildOptimizerSelectionReason(bestResult, intelligence),
+    usedRecommendedPrimary: bestResult?.strategyId === intelligence.primaryStrategyId,
+  };
 }
 
 function comparePackingResults(candidate, currentBest) {
@@ -2196,6 +2231,7 @@ function buildEmptyPackingResult(container, maxWeight, floorLoadLimit) {
     rejectedByWeightSummary: [],
     rejectedByConstraintSummary: [],
     evaluatedStrategies: [],
+    optimizerIntelligence: null,
   };
 }
 
@@ -2222,7 +2258,26 @@ export function optimizeMixedPacking({
     return buildEmptyPackingResult(internalContainer, maxWeight, resolvedFloorLoadLimit);
   }
 
-  const strategyResults = STRATEGY_PRESETS.map((strategy) =>
+  const intelligence = analyzeOptimizerManifest({
+    container: internalContainer,
+    boxTypes,
+    maxWeight,
+    floorLoadLimit: resolvedFloorLoadLimit,
+  });
+  const strategyPresetById = new Map(STRATEGY_PRESETS.map((strategy) => [strategy.id, strategy]));
+  const plannedStrategies = intelligence.strategyOrder
+    .map((strategyId) => {
+      const preset = strategyPresetById.get(strategyId);
+      if (!preset) return null;
+
+      return {
+        ...preset,
+        ...(intelligence.strategyOverrides?.[strategyId] || {}),
+      };
+    })
+    .filter(Boolean);
+
+  const strategyResults = plannedStrategies.map((strategy) =>
     runPackingStrategy({
       container: internalContainer,
       items: sortBoxes(items, strategy),
@@ -2238,7 +2293,8 @@ export function optimizeMixedPacking({
 
   return {
     ...bestResult,
-    evaluatedStrategies: buildStrategyRunsSummary(strategyResults),
+    evaluatedStrategies: buildStrategyRunsSummary(strategyResults, intelligence),
+    optimizerIntelligence: buildOptimizerIntelligence(bestResult, intelligence),
   };
 }
 

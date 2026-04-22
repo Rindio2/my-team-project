@@ -1,4 +1,4 @@
-export default function Header({ userName = '', onLogout = null }) {
+export default function Header({ userName = '', onLogout = null, controlsDisabled = false }) {
   return (
     <header className="app-header">
       <div className="header-brand">
@@ -18,6 +18,7 @@ export default function Header({ userName = '', onLogout = null }) {
             className="header-user-pill"
             title={`Đăng xuất ${userName || 'người dùng'}`}
             onClick={onLogout}
+            disabled={controlsDisabled}
           >
             <span>{userName || 'operator'}</span>
             <span>Đăng xuất</span>
@@ -29,6 +30,7 @@ export default function Header({ userName = '', onLogout = null }) {
           className="icon-btn"
           title="Chụp ảnh"
           aria-label="Chụp ảnh scene hiện tại"
+          disabled={controlsDisabled}
         >
           📸
         </button>
@@ -38,6 +40,7 @@ export default function Header({ userName = '', onLogout = null }) {
           className="icon-btn"
           title="Thu gọn sidebar"
           aria-label="Thu gọn hoặc mở rộng sidebar"
+          disabled={controlsDisabled}
         >
           ☰
         </button>

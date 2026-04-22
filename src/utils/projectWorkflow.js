@@ -342,7 +342,7 @@ export function buildOperationalReportHtml({
           .map(
             (strategy) => `
               <tr>
-                <td>${escapeHtml(strategy.label)}</td>
+                <td>${escapeHtml(`${strategy.dispatchRank || '-'} • ${strategy.label}`)}</td>
                 <td>${strategy.packedCount}</td>
                 <td>${formatPercent(strategy.efficiency)}</td>
                 <td>${formatPercent(strategy.sideImbalancePercent)}</td>
@@ -573,6 +573,26 @@ export function buildOperationalReportHtml({
                       commercial.headline
                     )}
                   `
+              }
+            </div>
+          </section>
+
+          <section class="section">
+            <h2>Optimizer intelligence</h2>
+            <div class="note">
+              ${
+                result?.optimizerIntelligence
+                  ? `
+                    Planning mode: <b>${escapeHtml(result.optimizerIntelligence.planningMode)}</b> •
+                    Advisor confidence: <b>${escapeHtml(String(result.optimizerIntelligence.confidence))}%</b> •
+                    Advisor primary strategy: <b>${escapeHtml(result.optimizerIntelligence.primaryStrategyLabel)}</b><br/>
+                    Selected strategy: <b>${escapeHtml(result.optimizerIntelligence.selectedStrategyLabel)}</b><br/>
+                    ${escapeHtml(result.optimizerIntelligence.selectionReason)}<br/>
+                    ${result.optimizerIntelligence.rationale
+                      .map((item) => `• ${escapeHtml(item)}`)
+                      .join('<br/>')}
+                  `
+                  : 'Khong co du lieu optimizer intelligence trong snapshot nay.'
               }
             </div>
           </section>
