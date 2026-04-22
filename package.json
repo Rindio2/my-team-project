@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "release:check-env": "node scripts/release-check.mjs",
     "github:sync-actions-config": "node scripts/sync-github-actions-config.mjs",
+    "cloudflare:ensure-project": "node scripts/ensure-cloudflare-pages-project.mjs",
     "cloudflare:sync-secrets": "node scripts/sync-cloudflare-pages-secrets.mjs",
     "release:bootstrap-config": "node scripts/bootstrap-release-config.mjs",
     "smoke": "node scripts/smoke-check.mjs",
