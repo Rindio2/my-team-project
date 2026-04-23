@@ -87,7 +87,7 @@ export default function ToolsSection() {
       <div className="viewer-control-grid">
         <div className="input-group">
           <label>Ẩn vách gần camera</label>
-          <select id="wallOcclusionMode" defaultValue="fade">
+          <select id="wallOcclusionMode" defaultValue="hide">
             <option value="hide">Ẩn hẳn vách gần nhất</option>
             <option value="fade">Làm mờ vách gần nhất</option>
           </select>

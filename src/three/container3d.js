@@ -19,6 +19,25 @@ import {
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 let sharedContainerWallTexture = null;
+const CONTAINER_FACES = ['head', 'door', 'left', 'right', 'top'];
+
+function tagOcclusionFace(object, face) {
+  if (!object || !face) return object;
+  object.userData.occlusionFace = face;
+  return object;
+}
+
+function collectFaceTargets(group, targetMap) {
+  CONTAINER_FACES.forEach((face) => {
+    targetMap[face] = [];
+  });
+
+  group.traverse((node) => {
+    const face = node.userData?.occlusionFace;
+    if (!face || !targetMap[face]) return;
+    targetMap[face].push(node);
+  });
+}
 
 function getContainerWallTexture() {
   if (sharedContainerWallTexture) return sharedContainerWallTexture;
@@ -229,10 +248,11 @@ function createWallMesh({ geometry, position, rotation, color, opacity, face }) 
   mesh.rotation.set(rotation.x, rotation.y, rotation.z);
   mesh.userData.face = face;
   mesh.userData.baseOpacity = opacity;
+  tagOcclusionFace(mesh, face);
   return mesh;
 }
 
-function addContainerRail(group, { width, height, depth, position, color = 0x7dd3fc }) {
+function addContainerRail(group, { width, height, depth, position, color = 0x7dd3fc, face = null }) {
   const rail = new Mesh(
     new BoxGeometry(width, height, depth),
     new MeshStandardMaterial({
@@ -245,13 +265,15 @@ function addContainerRail(group, { width, height, depth, position, color = 0x7dd
   );
 
   rail.position.copy(position);
+  tagOcclusionFace(rail, face);
+  rail.userData.baseOpacity = rail.material.opacity ?? 1;
   rail.castShadow = true;
   rail.receiveShadow = true;
   group.add(rail);
   return rail;
 }
 
-function addDecalPlane(group, { width, height, position, rotation, texture, opacity = 0.88 }) {
+function addDecalPlane(group, { width, height, position, rotation, texture, opacity = 0.88, face = null }) {
   const decal = new Mesh(
     new PlaneGeometry(width, height),
     new MeshBasicMaterial({
@@ -265,10 +287,12 @@ function addDecalPlane(group, { width, height, position, rotation, texture, opac
 
   decal.position.copy(position);
   decal.rotation.set(rotation.x, rotation.y, rotation.z);
+  tagOcclusionFace(decal, face);
+  decal.userData.baseOpacity = opacity;
   group.add(decal);
 }
 
-function addContainerPanel(group, { width, height, depth, position, color, opacity = 0.46 }) {
+function addContainerPanel(group, { width, height, depth, position, color, opacity = 0.46, face = null }) {
   const material = new MeshStandardMaterial({
     color,
     map: getContainerWallTexture(),
@@ -288,6 +312,8 @@ function addContainerPanel(group, { width, height, depth, position, color, opaci
 
   const panel = new Mesh(new BoxGeometry(width, height, depth), material);
   panel.position.copy(position);
+  tagOcclusionFace(panel, face);
+  panel.userData.baseOpacity = opacity;
   panel.castShadow = true;
   panel.receiveShadow = true;
   group.add(panel);
@@ -321,6 +347,7 @@ function addDoorHardware(group, width, height, depth) {
       position: new Vector3(door.x, height * 0.5, depth / 2 + 2.2),
       color: door.panelColor,
       opacity: 0.72,
+      face: 'door',
     });
   });
 
@@ -334,6 +361,7 @@ function addDoorHardware(group, width, height, depth) {
       depth: 3,
       position: new Vector3(door.x, height * 0.16, z),
       color: doorColor,
+      face: 'door',
     });
     addContainerRail(group, {
       width: door.railWidth,
@@ -341,6 +369,7 @@ function addDoorHardware(group, width, height, depth) {
       depth: 3,
       position: new Vector3(door.x, height * 0.84, z),
       color: doorColor,
+      face: 'door',
     });
     addContainerRail(group, {
       width: 3,
@@ -348,6 +377,7 @@ function addDoorHardware(group, width, height, depth) {
       depth: 3,
       position: new Vector3(door.x - door.railWidth / 2, height * 0.5, z),
       color: doorColor,
+      face: 'door',
     });
     addContainerRail(group, {
       width: 3,
@@ -355,6 +385,7 @@ function addDoorHardware(group, width, height, depth) {
       depth: 3,
       position: new Vector3(door.x + door.railWidth / 2, height * 0.5, z),
       color: doorColor,
+      face: 'door',
     });
   });
 
@@ -364,6 +395,7 @@ function addDoorHardware(group, width, height, depth) {
     depth: 5,
     position: new Vector3(0, height * 0.5, z + 1.2),
     color: shadowColor,
+    face: 'door',
   });
 
   [-width * 0.32, -width * 0.12, width * 0.12, width * 0.32].forEach((x) => {
@@ -373,6 +405,7 @@ function addDoorHardware(group, width, height, depth) {
       depth: 4,
       position: new Vector3(x, height * 0.5, z + 2.4),
       color: hardwareColor,
+      face: 'door',
     });
 
     [height * 0.24, height * 0.5, height * 0.76].forEach((y) => {
@@ -382,6 +415,7 @@ function addDoorHardware(group, width, height, depth) {
         depth: 5,
         position: new Vector3(x, y, z + 3.2),
         color: hardwareColor,
+        face: 'door',
       });
     });
   });
@@ -394,6 +428,7 @@ function addDoorHardware(group, width, height, depth) {
         depth: 7,
         position: new Vector3(x, y, z + 3.8),
         color: hardwareColor,
+        face: 'door',
       });
     });
   });
@@ -405,6 +440,7 @@ function addDoorHardware(group, width, height, depth) {
       depth: 6,
       position: new Vector3(x, height * 0.46, z + 4.6),
       color: 0xfbbf24,
+      face: 'door',
     });
   });
 }
@@ -425,12 +461,14 @@ function addForkliftPocketsAndSkids(group, width, depth) {
 
   [-depth * 0.22, depth * 0.22].forEach((z) => {
     [-width / 2 - 2.2, width / 2 + 2.2].forEach((x) => {
+      const face = x < 0 ? 'left' : 'right';
       addContainerRail(group, {
         width: 3,
         height: 12,
         depth: 38,
         position: new Vector3(x, 14, z),
         color: pocketColor,
+        face,
       });
       addContainerRail(group, {
         width: 3,
@@ -438,6 +476,7 @@ function addForkliftPocketsAndSkids(group, width, depth) {
         depth: 46,
         position: new Vector3(x, 21.5, z),
         color: 0xeab308,
+        face,
       });
     });
   });
@@ -453,6 +492,7 @@ function addHeadWallDetails(group, width, height, depth) {
     depth: 4,
     position: new Vector3(0, height * 0.16, z),
     color: headColor,
+    face: 'head',
   });
   addContainerRail(group, {
     width: width * 0.94,
@@ -460,6 +500,7 @@ function addHeadWallDetails(group, width, height, depth) {
     depth: 4,
     position: new Vector3(0, height * 0.84, z),
     color: headColor,
+    face: 'head',
   });
 
   const ribCount = Math.max(4, Math.floor(width / 44));
@@ -471,6 +512,7 @@ function addHeadWallDetails(group, width, height, depth) {
       depth: 4,
       position: new Vector3(x, height * 0.5, z + 1.5),
       color: headColor,
+      face: 'head',
     });
   }
 }
@@ -487,6 +529,7 @@ function addRoofCorrugations(group, width, height, depth) {
       depth: depth * 0.96,
       position: new Vector3(x, height + 3.2, 0),
       color: index % 2 === 0 ? 0x7dd3fc : 0x2563eb,
+      face: 'top',
     });
   }
 }
@@ -519,6 +562,7 @@ function addContainerDecals(group, width, height, depth) {
     position: new Vector3(width / 2 + 4.2, height * 0.62, -depth * 0.12),
     rotation: new Euler(0, Math.PI / 2, 0),
     texture: sideTexture,
+    face: 'right',
   });
 
   addDecalPlane(group, {
@@ -527,6 +571,7 @@ function addContainerDecals(group, width, height, depth) {
     position: new Vector3(-width / 2 - 4.2, height * 0.62, -depth * 0.12),
     rotation: new Euler(0, -Math.PI / 2, 0),
     texture: sideTexture.clone(),
+    face: 'left',
   });
 
   addDecalPlane(group, {
@@ -535,6 +580,7 @@ function addContainerDecals(group, width, height, depth) {
     position: new Vector3(0, height * 0.66, depth / 2 + 8.8),
     rotation: new Euler(0, 0, 0),
     texture: doorTexture,
+    face: 'door',
   });
 
   addDecalPlane(group, {
@@ -543,6 +589,7 @@ function addContainerDecals(group, width, height, depth) {
     position: new Vector3(0, height * 0.64, -depth / 2 - 8.8),
     rotation: new Euler(0, Math.PI, 0),
     texture: headTexture,
+    face: 'head',
   });
 }
 
@@ -584,6 +631,7 @@ function addContainerRibs(group, width, height, depth) {
       depth: 2.4,
       position: new Vector3(-width / 2 + 1.2, height * 0.5, z),
       color,
+      face: 'left',
     });
 
     addContainerRail(group, {
@@ -592,6 +640,7 @@ function addContainerRibs(group, width, height, depth) {
       depth: 2.4,
       position: new Vector3(width / 2 - 1.2, height * 0.5, z),
       color,
+      face: 'right',
     });
   }
 
@@ -607,6 +656,7 @@ function addContainerRibs(group, width, height, depth) {
       depth: 1.8,
       position: new Vector3(x, height * 0.5, -depth / 2 + 1.2),
       color: 0x1f7f57,
+      face: 'head',
     });
 
     addContainerRail(group, {
@@ -615,6 +665,7 @@ function addContainerRibs(group, width, height, depth) {
       depth: 1.8,
       position: new Vector3(x, height * 0.5, depth / 2 - 1.2),
       color: 0xb85b1d,
+      face: 'door',
     });
   }
 
@@ -773,7 +824,6 @@ export function updateContainerMesh({
   ];
 
   walls.forEach((wall) => {
-    resolvedWallMeshes[wall.userData.face] = wall;
     group.add(wall);
   });
 
@@ -816,6 +866,8 @@ export function updateContainerMesh({
   const doorMarker = makeMarker('CỬA CONTAINER', '#f97316', 0, height + 25, depth / 2 + 30);
   group.add(doorMarker);
 
+  collectFaceTargets(group, resolvedWallMeshes);
+
   if (shockGroup && shockGroup.parent !== group) {
     group.add(shockGroup);
   }
@@ -851,52 +903,73 @@ export function updateContainerViewOcclusion({
 }) {
   if (!wallMeshes) return;
 
-  const faces = ['head', 'door', 'left', 'right', 'top'];
+  function getFaceTargets(face) {
+    const targets = wallMeshes[face];
+    if (!targets) return [];
+    return Array.isArray(targets) ? targets : [targets];
+  }
 
-  const restoreFace = (mesh) => {
-    if (!mesh) return;
-    mesh.visible = true;
+  function applyToTargetMaterials(target, callback) {
+    if (!target?.material) return;
 
-    if (mesh.material) {
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      materials.forEach((material) => {
-        material.opacity = mesh.userData.baseOpacity ?? material.opacity;
-        material.transparent = true;
-        material.depthWrite = false;
-        material.needsUpdate = true;
-      });
-    }
-  };
+    const materials = Array.isArray(target.material) ? target.material : [target.material];
+    materials.forEach((material) => {
+      if (material.userData.baseOpacity === undefined) {
+        material.userData.baseOpacity = target.userData.baseOpacity ?? material.opacity ?? 1;
+        material.userData.baseTransparent = material.transparent;
+        material.userData.baseDepthWrite = material.depthWrite;
+      }
+
+      callback(material);
+      material.needsUpdate = true;
+    });
+  }
+
+  function restoreTarget(target) {
+    if (!target) return;
+    target.visible = true;
+    applyToTargetMaterials(target, (material) => {
+      const baseOpacity = material.userData.baseOpacity ?? target.userData.baseOpacity ?? material.opacity;
+      material.opacity = baseOpacity;
+      material.transparent = material.userData.baseTransparent ?? baseOpacity < 1;
+      material.depthWrite = material.userData.baseDepthWrite ?? baseOpacity >= 0.96;
+    });
+  }
+
+  function fadeTarget(target) {
+    if (!target) return;
+    target.visible = true;
+    applyToTargetMaterials(target, (material) => {
+      const baseOpacity = material.userData.baseOpacity ?? target.userData.baseOpacity ?? 1;
+      material.opacity = Math.max(0.035, Number(baseOpacity || 0.16) * 0.18);
+      material.transparent = true;
+      material.depthWrite = false;
+    });
+  }
 
   if (!enabled) {
-    faces.forEach((face) => {
-      restoreFace(wallMeshes[face]);
+    CONTAINER_FACES.forEach((face) => {
+      getFaceTargets(face).forEach(restoreTarget);
     });
     return null;
   }
 
   const hiddenFace = resolveContainerFaceFromCamera({ camera, height });
 
-  faces.forEach((face) => {
-    const mesh = wallMeshes[face];
-    if (!mesh) return;
-
-    restoreFace(mesh);
+  CONTAINER_FACES.forEach((face) => {
+    const targets = getFaceTargets(face);
+    targets.forEach(restoreTarget);
 
     if (face !== hiddenFace) return;
 
     if (mode === 'fade') {
-      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-      materials.forEach((material) => {
-        material.opacity = Math.max(0.035, Number(mesh.userData.baseOpacity || 0.16) * 0.18);
-        material.depthWrite = false;
-        material.needsUpdate = true;
-      });
-      mesh.visible = true;
+      targets.forEach(fadeTarget);
       return;
     }
 
-    mesh.visible = false;
+    targets.forEach((target) => {
+      target.visible = false;
+    });
   });
 
   return hiddenFace;

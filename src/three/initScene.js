@@ -97,7 +97,7 @@ export function createSceneSystem(canvasDiv) {
   transformControl.addEventListener('dragging-changed', (e) => {
     orbit.enabled = !e.value;
   });
-  scene.add(transformControl);
+  scene.add(transformControl.getHelper());
 
   scene.add(new AmbientLight(0xdbeafe, 0.48));
   scene.add(new HemisphereLight(0xbdefff, 0x06111f, 1.08));
