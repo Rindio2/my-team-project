@@ -23,7 +23,11 @@ const CONTAINER_FACES = ['head', 'door', 'left', 'right', 'top'];
 
 function tagOcclusionFace(object, face) {
   if (!object || !face) return object;
-  object.userData.occlusionFace = face;
+
+  const faces = Array.isArray(face) ? face : [face];
+  const normalizedFaces = [...new Set(faces.filter(Boolean))];
+  object.userData.occlusionFaces = normalizedFaces;
+  object.userData.occlusionFace = normalizedFaces[0];
   return object;
 }
 
@@ -33,9 +37,11 @@ function collectFaceTargets(group, targetMap) {
   });
 
   group.traverse((node) => {
-    const face = node.userData?.occlusionFace;
-    if (!face || !targetMap[face]) return;
-    targetMap[face].push(node);
+    const faces = node.userData?.occlusionFaces || (node.userData?.occlusionFace ? [node.userData.occlusionFace] : []);
+    faces.forEach((face) => {
+      if (!targetMap[face]) return;
+      targetMap[face].push(node);
+    });
   });
 }
 
@@ -320,13 +326,14 @@ function addContainerPanel(group, { width, height, depth, position, color, opaci
   return panel;
 }
 
-function addCornerCasting(group, x, y, z, color = 0x0f172a) {
+function addCornerCasting(group, x, y, z, color = 0x0f172a, face = null) {
   addContainerRail(group, {
     width: 13,
     height: 9,
     depth: 13,
     position: new Vector3(x, y, z),
     color,
+    face,
   });
 }
 
@@ -601,6 +608,7 @@ function addContainerRibs(group, width, height, depth) {
   for (let index = 0; index <= ribCount; index++) {
     const z = zStart + index * step;
     const ribColor = index === 0 || index === ribCount ? 0xfb923c : 0x38bdf8;
+    const endFace = z <= -depth / 2 + 0.001 ? 'head' : z >= depth / 2 - 0.001 ? 'door' : null;
 
     addContainerRail(group, {
       width: 3.5,
@@ -608,6 +616,7 @@ function addContainerRibs(group, width, height, depth) {
       depth: 3.5,
       position: new Vector3(-width / 2, height / 2, z),
       color: ribColor,
+      face: endFace ? ['left', endFace] : 'left',
     });
 
     addContainerRail(group, {
@@ -616,6 +625,7 @@ function addContainerRibs(group, width, height, depth) {
       depth: 3.5,
       position: new Vector3(width / 2, height / 2, z),
       color: ribColor,
+      face: endFace ? ['right', endFace] : 'right',
     });
   }
 
@@ -670,16 +680,17 @@ function addContainerRibs(group, width, height, depth) {
   }
 
   [
-    { x: -width / 2, y: height, z: 0, railWidth: 4, railHeight: 4, railDepth: depth },
-    { x: width / 2, y: height, z: 0, railWidth: 4, railHeight: 4, railDepth: depth },
-    { x: 0, y: height, z: -depth / 2, railWidth: width, railHeight: 4, railDepth: 4 },
-    { x: 0, y: height, z: depth / 2, railWidth: width, railHeight: 4, railDepth: 4 },
+    { x: -width / 2, y: height, z: 0, railWidth: 4, railHeight: 4, railDepth: depth, face: ['left', 'top'] },
+    { x: width / 2, y: height, z: 0, railWidth: 4, railHeight: 4, railDepth: depth, face: ['right', 'top'] },
+    { x: 0, y: height, z: -depth / 2, railWidth: width, railHeight: 4, railDepth: 4, face: ['head', 'top'] },
+    { x: 0, y: height, z: depth / 2, railWidth: width, railHeight: 4, railDepth: 4, face: ['door', 'top'] },
   ].forEach((rail) => {
     addContainerRail(group, {
       width: rail.railWidth,
       height: rail.railHeight,
       depth: rail.railDepth,
       position: new Vector3(rail.x, rail.y, rail.z),
+      face: rail.face,
     });
   });
 
@@ -689,19 +700,22 @@ function addContainerRibs(group, width, height, depth) {
     { x: -width / 2, z: depth / 2, color: 0xfb923c },
     { x: width / 2, z: depth / 2, color: 0xfb923c },
   ].forEach((post) => {
+    const faces = [post.x < 0 ? 'left' : 'right', post.z < 0 ? 'head' : 'door'];
     addContainerRail(group, {
       width: 7,
       height: height + 2,
       depth: 7,
       position: new Vector3(post.x, height / 2, post.z),
       color: post.color,
+      face: faces,
     });
   });
 
   [-width / 2, width / 2].forEach((x) => {
     [-depth / 2, depth / 2].forEach((z) => {
-      addCornerCasting(group, x, -2.4, z);
-      addCornerCasting(group, x, height + 3.4, z);
+      const faces = [x < 0 ? 'left' : 'right', z < 0 ? 'head' : 'door'];
+      addCornerCasting(group, x, -2.4, z, 0x0f172a, faces);
+      addCornerCasting(group, x, height + 3.4, z, 0x0f172a, [...faces, 'top']);
     });
   });
 
@@ -832,6 +846,8 @@ export function updateContainerMesh({
     new LineBasicMaterial({ color: 0x9ddcff, transparent: true, opacity: 0.72 })
   );
   wire.position.set(0, height / 2, 0);
+  tagOcclusionFace(wire, CONTAINER_FACES);
+  wire.userData.baseOpacity = 0.72;
   group.add(wire);
 
   addContainerRibs(group, width, height, depth);
@@ -948,31 +964,38 @@ export function updateContainerViewOcclusion({
   }
 
   if (!enabled) {
+    const allTargets = new Set();
     CONTAINER_FACES.forEach((face) => {
-      getFaceTargets(face).forEach(restoreTarget);
+      getFaceTargets(face).forEach((target) => allTargets.add(target));
     });
+    allTargets.forEach(restoreTarget);
     return null;
   }
 
   const hiddenFace = resolveContainerFaceFromCamera({ camera, height });
+  const allTargets = new Set();
 
   CONTAINER_FACES.forEach((face) => {
-    const targets = getFaceTargets(face);
-    targets.forEach(restoreTarget);
-
-    if (face !== hiddenFace) return;
-
-    if (mode === 'fade') {
-      targets.forEach(fadeTarget);
-      return;
-    }
-
-    targets.forEach((target) => {
-      target.visible = false;
-    });
+    getFaceTargets(face).forEach((target) => allTargets.add(target));
   });
 
-  return hiddenFace;
+  allTargets.forEach(restoreTarget);
+  const hiddenFaces = hiddenFace === 'left' || hiddenFace === 'right' ? ['left', 'right'] : [hiddenFace];
+  const hiddenTargets = new Set();
+  hiddenFaces.forEach((face) => {
+    getFaceTargets(face).forEach((target) => hiddenTargets.add(target));
+  });
+
+  if (mode === 'fade') {
+    hiddenTargets.forEach(fadeTarget);
+    return hiddenFaces.length > 1 ? 'side' : hiddenFace;
+  }
+
+  hiddenTargets.forEach((target) => {
+    target.visible = false;
+  });
+
+  return hiddenFaces.length > 1 ? 'side' : hiddenFace;
 }
 
 export function setContainerClipping(group, clippingPlanes = []) {

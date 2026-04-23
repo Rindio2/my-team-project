@@ -2107,6 +2107,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       if (face === 'door') return 'Cửa container';
       if (face === 'left') return 'Vách trái';
       if (face === 'right') return 'Vách phải';
+      if (face === 'side') return 'Hai vách hông';
       if (face === 'top') return 'Nóc container';
       return 'Không xác định';
     }
@@ -2115,10 +2116,12 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       if (!viewerStatus) return;
 
       const container = getCurrentContainerSize();
-      const occludedFace =
+      const cameraOcclusionFace =
         autoHideWalls?.checked !== false
           ? resolveContainerFaceFromCamera({ camera, height: container.h })
           : null;
+      const occludedFace =
+        cameraOcclusionFace === 'left' || cameraOcclusionFace === 'right' ? 'side' : cameraOcclusionFace;
       const cameraOffset = camera.position.clone().sub(orbit.target);
       const distance = cameraOffset.length();
       const yaw = sceneSys.THREE.MathUtils.radToDeg(Math.atan2(cameraOffset.x, cameraOffset.z));
