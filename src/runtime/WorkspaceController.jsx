@@ -291,6 +291,8 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       const { scene, camera, renderer, orbit, transformControl, stars, cogMarker } = sceneSys;
       transformControl.visible = false;
       transformControl.enabled = false;
+      const initialTransformHelper = transformControl.getHelper?.();
+      if (initialTransformHelper) initialTransformHelper.visible = false;
       const freeModeEnabled = isFreeDeploymentMode();
 
       const SIDEBAR_COLLAPSED_STORAGE_KEY = 'packet-opt-sidebar-collapsed';
@@ -2644,10 +2646,17 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       return transformControl.getMode?.() || transformControl.mode || 'translate';
     }
 
-    function setManualControlMode(mode, announce = false) {
-      transformControl.setMode(mode);
+    function hideTransformVectors() {
+      transformControl.detach();
       transformControl.visible = false;
       transformControl.enabled = false;
+      const helper = transformControl.getHelper?.();
+      if (helper) helper.visible = false;
+    }
+
+    function setManualControlMode(mode, announce = false) {
+      transformControl.setMode(mode);
+      hideTransformVectors();
       syncManualArrangePanel();
 
       if (announce) {
@@ -2657,7 +2666,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
           lines:
             mode === 'rotate'
               ? ['Chọn một preset trong mục lật 6 mặt để đổi hướng box đang chọn.']
-              : ['Kéo gizmo trực tiếp trong scene để di chuyển box đang chọn.'],
+              : ['Kéo trực tiếp thùng trong scene để di chuyển; không dùng trục vector.'],
           color: mode === 'rotate' ? '#8b5cf6' : '#38bdf8',
           background:
             mode === 'rotate' ? 'rgba(139,92,246,0.14)' : 'rgba(59,130,246,0.12)',
@@ -2990,7 +2999,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       selected = box || null;
 
       if (!selected) {
-        transformControl.detach();
+        hideTransformVectors();
         if (infoPanel) infoPanel.style.display = 'none';
         syncPreviewSampleLabels();
         syncManualArrangePanel();
@@ -2999,7 +3008,7 @@ export default function WorkspaceController({ onReady = () => {}, onError = () =
       }
 
       setCartonSelection(selected, true);
-      transformControl.attach(selected);
+      hideTransformVectors();
       syncPreviewSampleLabels();
       showSelectedInfo(infoPanel, infoText, selected);
       syncManualArrangePanel();

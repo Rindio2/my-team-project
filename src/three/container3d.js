@@ -232,10 +232,10 @@ function createWallMesh({ geometry, position, rotation, color, opacity, face }) 
     map: getContainerWallTexture(),
     transparent: true,
     opacity,
-    roughness: 0.38,
-    metalness: 0.28,
+    roughness: 0.68,
+    metalness: 0.18,
     emissive: color,
-    emissiveIntensity: 0.012,
+    emissiveIntensity: 0.004,
     side: DoubleSide,
     depthWrite: false,
   });
@@ -258,21 +258,38 @@ function createWallMesh({ geometry, position, rotation, color, opacity, face }) 
   return mesh;
 }
 
-function addContainerRail(group, { width, height, depth, position, color = 0x7dd3fc, face = null }) {
+function addContainerRail(
+  group,
+  {
+    width,
+    height,
+    depth,
+    position,
+    color = 0x7dd3fc,
+    face = null,
+    opacity = 1,
+    roughness = 0.52,
+    metalness = 0.28,
+    emissiveIntensity = 0.035,
+  }
+) {
   const rail = new Mesh(
     new BoxGeometry(width, height, depth),
     new MeshStandardMaterial({
       color,
       emissive: color,
-      emissiveIntensity: 0.035,
-      roughness: 0.52,
-      metalness: 0.28,
+      emissiveIntensity,
+      transparent: opacity < 1,
+      opacity,
+      roughness,
+      metalness,
+      depthWrite: opacity >= 0.96,
     })
   );
 
   rail.position.copy(position);
   tagOcclusionFace(rail, face);
-  rail.userData.baseOpacity = rail.material.opacity ?? 1;
+  rail.userData.baseOpacity = opacity;
   rail.castShadow = true;
   rail.receiveShadow = true;
   group.add(rail);
@@ -335,6 +352,161 @@ function addCornerCasting(group, x, y, z, color = 0x0f172a, face = null) {
     color,
     face,
   });
+}
+
+function addDoorRubberSeals(group, width, height, depth) {
+  const z = depth / 2 + 6.2;
+  const sealColor = 0x111827;
+
+  [
+    { width: width * 0.96, height: 3, x: 0, y: height * 0.14 },
+    { width: width * 0.96, height: 3, x: 0, y: height * 0.86 },
+    { width: 3, height: height * 0.74, x: -width * 0.485, y: height * 0.5 },
+    { width: 3, height: height * 0.74, x: width * 0.485, y: height * 0.5 },
+    { width: 3.5, height: height * 0.78, x: 0, y: height * 0.5 },
+  ].forEach((seal) => {
+    addContainerRail(group, {
+      width: seal.width,
+      height: seal.height,
+      depth: 2.4,
+      position: new Vector3(seal.x, seal.y, z),
+      color: sealColor,
+      face: 'door',
+      opacity: 0.92,
+      roughness: 0.86,
+      metalness: 0.04,
+      emissiveIntensity: 0,
+    });
+  });
+}
+
+function addSideCorrugatedSkin(group, width, height, depth) {
+  const grooveCount = Math.max(14, Math.floor(depth / 42));
+  const lowerY = height * 0.26;
+  const midY = height * 0.51;
+  const upperY = height * 0.74;
+
+  for (let index = 0; index <= grooveCount; index++) {
+    const z = -depth / 2 + (depth * index) / grooveCount;
+    const color = index % 2 === 0 ? 0x0f3e68 : 0x1e6a9a;
+    const opacity = index % 2 === 0 ? 0.34 : 0.46;
+
+    [
+      { x: -width / 2 + 1.4, face: 'left' },
+      { x: width / 2 - 1.4, face: 'right' },
+    ].forEach((side) => {
+      addContainerRail(group, {
+        width: 1.15,
+        height: height * 0.68,
+        depth: index === 0 || index === grooveCount ? 4 : 1.2,
+        position: new Vector3(side.x, height * 0.52, z),
+        color,
+        face: side.face,
+        opacity,
+        roughness: 0.8,
+        metalness: 0.12,
+        emissiveIntensity: 0.01,
+      });
+    });
+  }
+
+  [lowerY, midY, upperY].forEach((y, rowIndex) => {
+    const color = rowIndex === 1 ? 0x092b49 : 0x123f61;
+    [
+      { x: -width / 2 + 1.1, face: 'left' },
+      { x: width / 2 - 1.1, face: 'right' },
+    ].forEach((side) => {
+      addContainerRail(group, {
+        width: 1.2,
+        height: 1.25,
+        depth: depth * 0.9,
+        position: new Vector3(side.x, y, 0),
+        color,
+        face: side.face,
+        opacity: 0.48,
+        roughness: 0.78,
+        metalness: 0.08,
+        emissiveIntensity: 0,
+      });
+    });
+  });
+}
+
+function addContainerWeathering(group, width, height, depth) {
+  const stainColor = 0x020617;
+
+  for (let index = 0; index < 10; index++) {
+    const z = -depth * 0.42 + (depth * 0.84 * index) / 9;
+    const streakHeight = height * (0.12 + (index % 4) * 0.025);
+    const y = height - streakHeight / 2 - height * 0.08;
+
+    [
+      { x: -width / 2 + 0.9, face: 'left' },
+      { x: width / 2 - 0.9, face: 'right' },
+    ].forEach((side) => {
+      addContainerRail(group, {
+        width: 0.75,
+        height: streakHeight,
+        depth: 1,
+        position: new Vector3(side.x, y, z),
+        color: stainColor,
+        face: side.face,
+        opacity: 0.22,
+        roughness: 0.95,
+        metalness: 0,
+        emissiveIntensity: 0,
+      });
+    });
+  }
+
+  [-width * 0.36, -width * 0.18, width * 0.08, width * 0.28].forEach((x, index) => {
+    const streakHeight = height * (0.14 + index * 0.025);
+    const y = height - streakHeight / 2 - height * 0.09;
+    addContainerRail(group, {
+      width: 1.2,
+      height: streakHeight,
+      depth: 1.1,
+      position: new Vector3(x, y, depth / 2 + 6.5),
+      color: stainColor,
+      face: 'door',
+      opacity: 0.2,
+      roughness: 0.95,
+      metalness: 0,
+      emissiveIntensity: 0,
+    });
+    addContainerRail(group, {
+      width: 1.2,
+      height: streakHeight * 0.82,
+      depth: 1.1,
+      position: new Vector3(-x * 0.85, y, -depth / 2 - 6.5),
+      color: stainColor,
+      face: 'head',
+      opacity: 0.18,
+      roughness: 0.95,
+      metalness: 0,
+      emissiveIntensity: 0,
+    });
+  });
+}
+
+function addRoofWearDetails(group, width, height, depth) {
+  const seamCount = Math.max(7, Math.floor(depth / 80));
+
+  for (let index = 1; index < seamCount; index++) {
+    const z = -depth / 2 + (depth * index) / seamCount;
+    addContainerRail(group, {
+      width: width * 0.9,
+      height: 0.9,
+      depth: 1.4,
+      position: new Vector3(0, height + 5.1, z),
+      color: 0x082f49,
+      face: 'top',
+      opacity: 0.32,
+      roughness: 0.9,
+      metalness: 0.04,
+      emissiveIntensity: 0,
+    });
+  }
 }
 
 function addDoorHardware(group, width, height, depth) {
@@ -719,11 +891,15 @@ function addContainerRibs(group, width, height, depth) {
     });
   });
 
+  addSideCorrugatedSkin(group, width, height, depth);
   addDoorHardware(group, width, height, depth);
+  addDoorRubberSeals(group, width, height, depth);
   addHeadWallDetails(group, width, height, depth);
   addRoofCorrugations(group, width, height, depth);
+  addRoofWearDetails(group, width, height, depth);
   addForkliftPocketsAndSkids(group, width, depth);
   addContainerDecals(group, width, height, depth);
+  addContainerWeathering(group, width, height, depth);
 }
 
 function addFloorLanes(group, width, depth) {
@@ -791,7 +967,7 @@ export function updateContainerMesh({
     delete resolvedWallMeshes[key];
   });
 
-  const wallOpacity = Math.max(0.52, opacity * 1.05);
+  const wallOpacity = Math.min(0.95, Math.max(0.84, opacity * 1.18));
   const shellGeo = new BoxGeometry(width, height, depth);
 
   const walls = [
@@ -816,7 +992,7 @@ export function updateContainerMesh({
       position: new Vector3(-width / 2, height / 2, 0),
       rotation: new Euler(0, Math.PI / 2, 0),
       color: 0x3d8cff,
-      opacity: Math.max(0.12, wallOpacity * 0.9),
+      opacity: Math.max(0.8, wallOpacity * 0.94),
       face: 'left',
     }),
     createWallMesh({
@@ -824,7 +1000,7 @@ export function updateContainerMesh({
       position: new Vector3(width / 2, height / 2, 0),
       rotation: new Euler(0, -Math.PI / 2, 0),
       color: 0x3d8cff,
-      opacity: Math.max(0.12, wallOpacity * 0.9),
+      opacity: Math.max(0.8, wallOpacity * 0.94),
       face: 'right',
     }),
     createWallMesh({
@@ -832,7 +1008,7 @@ export function updateContainerMesh({
       position: new Vector3(0, height, 0),
       rotation: new Euler(Math.PI / 2, 0, 0),
       color: 0x82c9ff,
-      opacity: Math.max(0.45, wallOpacity * 0.86),
+      opacity: Math.max(0.78, wallOpacity * 0.9),
       face: 'top',
     }),
   ];
@@ -843,11 +1019,11 @@ export function updateContainerMesh({
 
   const wire = new LineSegments(
     new EdgesGeometry(shellGeo),
-    new LineBasicMaterial({ color: 0x9ddcff, transparent: true, opacity: 0.72 })
+    new LineBasicMaterial({ color: 0x9ddcff, transparent: true, opacity: 0.22 })
   );
   wire.position.set(0, height / 2, 0);
   tagOcclusionFace(wire, CONTAINER_FACES);
-  wire.userData.baseOpacity = 0.72;
+  wire.userData.baseOpacity = 0.22;
   group.add(wire);
 
   addContainerRibs(group, width, height, depth);
