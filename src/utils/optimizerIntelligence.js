@@ -166,8 +166,10 @@ function buildStrategyScores(profile) {
   if (profile.volumeDemandRatio >= 0.82) {
     addScore('space-max-beam', 6, 'Ap luc the tich cao');
     addScore('largest-first', 2, 'Nhieu units can lap nhanh khong gian');
+    addScore('pct-online-policy', 3, 'Can anchor search de tranh khoa som khong gian container');
   } else if (profile.volumeDemandRatio >= 0.68) {
     addScore('space-max-beam', 3, 'Manifest can compact manh');
+    addScore('pct-online-policy', 2, 'Can thu them anchor points theo zone va layer');
   }
 
   if (profile.weightDemandRatio >= 0.72) {
@@ -248,9 +250,9 @@ function buildStrategyOverrides(profile, planningMode) {
           }
         : {},
     'pct-online-policy': {
-      beamWidth: profile.totalUnits >= 72 ? 5 : 4,
+      beamWidth: profile.totalUnits >= 72 ? 6 : profile.volumeDemandRatio >= 0.82 ? 5 : 4,
       branchFactor: profile.totalUnits >= 56 ? 2 : 3,
-      beamLookaheadCount: profile.totalUnits >= 64 ? 18 : 14,
+      beamLookaheadCount: profile.totalUnits >= 64 ? 22 : 16,
     },
   };
 }
@@ -308,7 +310,7 @@ function buildRecommendations(profile, primaryStrategyId) {
 
   if (primaryStrategyId === 'pct-online-policy') {
     recommendations.push(
-      'Dung PCT Online AI de giu quyet dinh xep theo tung buoc, uu tien diem dat sau-duoi-trai va repair sau cung.'
+      'Dung PCT Online AI de thu anchor points theo zone/layer, beam skip branch va repair sau cung.'
     );
   }
 

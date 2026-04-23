@@ -6,7 +6,7 @@ const CONTACT_EPSILON = 0.000001;
 const FACE_SNAP_TOLERANCE = 1.25;
 const MIN_SUPPORT_RATIO = 0.78;
 const PACKING_ALGORITHM_LABEL =
-  'Manifest-aware strategy dispatch + PCT-inspired online policy + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
+  'Manifest-aware strategy dispatch + PCT-inspired online policy + adaptive anchor search + skip-branch beam + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
 
 function resolveStackLimit(rawLimit) {
   const value = Number(rawLimit);
@@ -141,6 +141,37 @@ function getFootprint(box) {
   return Number(box.w || 0) * Number(box.d || 0);
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getDensity(box) {
+  const volume = getVolume(box);
+  return volume > EPSILON ? Number(box.weight || 0) / volume : 0;
+}
+
+function getPackingDifficulty(item = {}) {
+  const orientationPenalty = Math.max(0, 6 - getAllowedOrientations(item).length) * 2400;
+  const constraintPenalty =
+    Number(Boolean(item.noStack || item.fragile)) * 3600 +
+    Number(Boolean(item.noTilt)) * 1800 +
+    Number(getZoneSpecificity(item.deliveryZone)) * 1500 +
+    (Number.isFinite(item.maxLoadAbove) ? 900 : 0) +
+    (Number.isFinite(item.stackLimit) ? 700 : 0);
+  const shapePenalty =
+    Math.max(item.w || 0, item.h || 0, item.d || 0) * 18 +
+    Math.abs(Number(item.w || 0) - Number(item.d || 0)) * 10;
+
+  return (
+    constraintPenalty +
+    orientationPenalty +
+    shapePenalty +
+    getVolume(item) / 650 +
+    getFootprint(item) / 18 +
+    getDensity(item) * 280000
+  );
+}
+
 function defaultItemComparator(a, b) {
   const specificityA = getZoneSpecificity(a.deliveryZone);
   const specificityB = getZoneSpecificity(b.deliveryZone);
@@ -234,8 +265,10 @@ const STRATEGY_PRESETS = [
     id: 'pct-online-policy',
     label: 'PCT Online AI',
     pointSortMode: 'pct-deep-bottom-left',
+    anchorMode: 'pct-online',
     scoringProfile: 'pct',
     searchMode: 'beam',
+    allowSkipBranch: true,
     beamWidth: 4,
     branchFactor: 2,
     beamLookaheadCount: 16,
@@ -247,12 +280,15 @@ const STRATEGY_PRESETS = [
         return b.deliveryOrder - a.deliveryOrder;
       }
 
+      const difficultyDiff = getPackingDifficulty(b) - getPackingDifficulty(a);
+      if (difficultyDiff !== 0) return difficultyDiff;
+
       if (a.fragile !== b.fragile) {
         return Number(a.fragile) - Number(b.fragile);
       }
 
-      const densityA = getVolume(a) > 0 ? Number(a.weight || 0) / getVolume(a) : 0;
-      const densityB = getVolume(b) > 0 ? Number(b.weight || 0) / getVolume(b) : 0;
+      const densityA = getDensity(a);
+      const densityB = getDensity(b);
       if (densityB !== densityA) return densityB - densityA;
 
       const volDiff = getVolume(b) - getVolume(a);
@@ -827,11 +863,44 @@ function getPlacementContactRatio(box, placed, supportInfo, container) {
   return contactArea / surfaceArea;
 }
 
+function getBoundaryContactRatio(box, container) {
+  const surfaceArea = Math.max(
+    EPSILON,
+    2 * (box.w * box.h + box.w * box.d + box.h * box.d)
+  );
+  let contactArea = 0;
+
+  if (box.x <= EPSILON) contactArea += box.h * box.d;
+  if (box.y <= EPSILON) contactArea += box.w * box.d;
+  if (box.z <= EPSILON) contactArea += box.w * box.h;
+  if (box.x + box.w >= container.w - EPSILON) contactArea += box.h * box.d;
+  if (box.y + box.h >= container.h - EPSILON) contactArea += box.w * box.d;
+  if (box.z + box.d >= container.d - EPSILON) contactArea += box.w * box.h;
+
+  return contactArea / surfaceArea;
+}
+
+function getDeliveryZoneCenterPenalty(box, container) {
+  const zone = normalizeDeliveryZone(box.deliveryZone);
+  if (zone === 'any') return 0;
+
+  const range = getDeliveryZoneRange(zone, container);
+  const targetCenter = (range.min + range.max) / 2;
+  const boxCenter = box.z + box.d / 2;
+  const zoneDepth = Math.max(EPSILON, range.max - range.min);
+
+  return Math.abs(boxCenter - targetCenter) / zoneDepth;
+}
+
 function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'balance') {
   const centerX = box.x + box.w / 2;
   const balanceMetrics = getLoadBalanceMetrics([...placed, box], container);
   const envelopeMetrics = getEnvelopeMetrics([...placed, box], container);
   const contactRatio = getPlacementContactRatio(box, placed, supportInfo, container);
+  const boundaryContactRatio = getBoundaryContactRatio(box, container);
+  const floorCoverageRatio =
+    box.y <= EPSILON ? getFootprint(box) / Math.max(EPSILON, container.w * container.d) : 0;
+  const densityKgM3 = getDensity(box) * 1000000;
 
   const profiles = {
     balance: {
@@ -895,20 +964,24 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
       contactBonus: 205,
     },
     pct: {
-      floorPenalty: 26,
-      headPenalty: 1.05,
-      deliveryWeight: 0.34,
-      lateralPenalty: 0.18,
-      supportPenalty: 165,
-      sideBalancePenalty: 145,
-      lengthBalancePenalty: 86,
-      cogXPenalty: 0.24,
-      cogZPenalty: 0.12,
-      wastePenalty: 310,
-      heightSpanPenalty: 165,
-      depthSpanPenalty: 92,
-      widthSpanPenalty: 76,
-      contactBonus: 245,
+      floorPenalty: 24,
+      headPenalty: 0.92,
+      deliveryWeight: 0.38,
+      lateralPenalty: 0.16,
+      supportPenalty: 178,
+      sideBalancePenalty: 152,
+      lengthBalancePenalty: 92,
+      cogXPenalty: 0.25,
+      cogZPenalty: 0.13,
+      wastePenalty: 355,
+      heightSpanPenalty: 158,
+      depthSpanPenalty: 96,
+      widthSpanPenalty: 82,
+      contactBonus: 265,
+      boundaryContactBonus: 120,
+      floorCoverageBonus: 170,
+      densityBaseBonus: 0.018,
+      zoneCenterPenalty: 54,
     },
   };
 
@@ -929,7 +1002,12 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
     (envelopeMetrics.heightRatio || 0) * (profile.heightSpanPenalty || 0) +
     (envelopeMetrics.depthRatio || 0) * (profile.depthSpanPenalty || 0) +
     (envelopeMetrics.widthRatio || 0) * (profile.widthSpanPenalty || 0);
-  const contactBonus = contactRatio * (profile.contactBonus || 0);
+  const contactBonus =
+    contactRatio * (profile.contactBonus || 0) +
+    boundaryContactRatio * (profile.boundaryContactBonus || 0) +
+    floorCoverageRatio * (profile.floorCoverageBonus || 0) +
+    (box.y <= EPSILON ? densityKgM3 * (profile.densityBaseBonus || 0) : 0);
+  const zoneCenterPenalty = getDeliveryZoneCenterPenalty(box, container) * (profile.zoneCenterPenalty || 0);
 
   return (
     contactBonus -
@@ -939,6 +1017,7 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
     lateralBalancePenalty +
     supportPenalty +
     getZonePenalty(box, container) +
+      zoneCenterPenalty +
       balancePenalty +
       envelopePenalty
     )
@@ -1465,6 +1544,73 @@ function comparePlacementCandidates(candidate, currentBest) {
   return 0;
 }
 
+function buildPctAnchorPoints({ item, orientation, placed, container }) {
+  const zoneRange = getDeliveryZoneRange(item.deliveryZone, container);
+  const maxX = Math.max(0, container.w - orientation.w);
+  const minZ = clampNumber(zoneRange.min, 0, Math.max(0, container.d - orientation.d));
+  const maxZ = clampNumber(
+    zoneRange.max - orientation.d,
+    minZ,
+    Math.max(minZ, container.d - orientation.d)
+  );
+  const centerZ = clampNumber((zoneRange.min + zoneRange.max - orientation.d) / 2, minZ, maxZ);
+  const centerX = maxX / 2;
+  const xAnchors = [0, maxX, centerX, centerX * 0.5, centerX + maxX * 0.25]
+    .map((value) => clampNumber(value, 0, maxX));
+  const zAnchors = [minZ, maxZ, centerZ];
+  const layerHeights = [0];
+
+  placed.forEach((box) => {
+    const top = Number(box.y || 0) + Number(box.h || 0);
+    if (top + orientation.h <= container.h + EPSILON) {
+      layerHeights.push(top);
+    }
+  });
+
+  const uniqueLayers = [...new Set(layerHeights.map((value) => Number(value.toFixed(4))))]
+    .sort((a, b) => a - b)
+    .slice(0, 8);
+  const anchors = [];
+
+  uniqueLayers.forEach((y) => {
+    xAnchors.forEach((x) => {
+      zAnchors.forEach((z) => {
+        anchors.push({ x, y, z });
+      });
+    });
+  });
+
+  return anchors;
+}
+
+function getCandidatePointsForOrientation({
+  item,
+  orientation,
+  placed,
+  candidatePoints,
+  container,
+  strategy,
+}) {
+  if (strategy.anchorMode !== 'pct-online') {
+    return candidatePoints;
+  }
+
+  return normalizeCandidatePoints(
+    [
+      ...candidatePoints,
+      ...buildPctAnchorPoints({
+        item,
+        orientation,
+        placed,
+        container,
+      }),
+    ],
+    placed,
+    container,
+    strategy.pointSortMode
+  );
+}
+
 function enumeratePlacementCandidates({
   item,
   placed,
@@ -1480,7 +1626,16 @@ function enumeratePlacementCandidates({
   const orientations = getAllowedOrientations(item);
 
   for (const orientation of orientations) {
-    for (const point of candidatePoints) {
+    const pointsForOrientation = getCandidatePointsForOrientation({
+      item,
+      orientation,
+      placed,
+      candidatePoints,
+      container,
+      strategy,
+    });
+
+    for (const point of pointsForOrientation) {
       const candidate = buildPlacementCandidate(item, orientation, point, nextPlacementId);
 
       if (!fitsInside(container, candidate)) continue;
@@ -1714,6 +1869,15 @@ function getPackingStateSignature(state) {
   ].join('||');
 }
 
+function getSkipBranchPenalty(item) {
+  return (
+    8500 +
+    Number(item.priorityGroup || item.deliveryOrder || 1) * 2600 +
+    getPackingDifficulty(item) * 0.32 +
+    getVolume(item) / 220
+  );
+}
+
 function pruneBeamStates(states, container, beamWidth) {
   const bestBySignature = new Map();
 
@@ -1794,6 +1958,16 @@ function runBeamPack({
 
         nextStates.push(nextState);
         return;
+      }
+
+      if (strategy.allowSkipBranch && index < beamLookaheadCount && index < boxes.length - 1) {
+        const skippedState = clonePackingState(state);
+        skippedState.rejectedBySpace.push({
+          ...item,
+          reason: 'PCT skip branch: bỏ tạm item này để thử nghiệm bố cục tổng thể tốt hơn',
+        });
+        skippedState.searchScore -= getSkipBranchPenalty(item);
+        nextStates.push(skippedState);
       }
 
       placements.slice(0, activeBranchFactor).forEach((placement) => {

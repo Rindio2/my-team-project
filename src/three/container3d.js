@@ -1,6 +1,7 @@
 import {
   Box3,
   BoxGeometry,
+  CanvasTexture,
   DoubleSide,
   EdgesGeometry,
   Euler,
@@ -11,9 +12,52 @@ import {
   Mesh,
   MeshStandardMaterial,
   PlaneGeometry,
+  RepeatWrapping,
   Vector3,
 } from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+
+let sharedContainerWallTexture = null;
+
+function getContainerWallTexture() {
+  if (sharedContainerWallTexture) return sharedContainerWallTexture;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#1e5f86';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  for (let x = 0; x < canvas.width; x += 22) {
+    const isRaised = Math.floor(x / 22) % 2 === 0;
+    ctx.fillStyle = isRaised ? 'rgba(186,230,253,0.16)' : 'rgba(2,6,23,0.18)';
+    ctx.fillRect(x, 0, 11, canvas.height);
+  }
+
+  ctx.strokeStyle = 'rgba(125,211,252,0.2)';
+  ctx.lineWidth = 1;
+  for (let y = 28; y < canvas.height; y += 38) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y + 4);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = 'rgba(15,23,42,0.16)';
+  for (let i = 0; i < 120; i++) {
+    const x = Math.random() * canvas.width;
+    const y = Math.random() * canvas.height;
+    ctx.fillRect(x, y, 1.2, 1.2);
+  }
+
+  sharedContainerWallTexture = new CanvasTexture(canvas);
+  sharedContainerWallTexture.wrapS = RepeatWrapping;
+  sharedContainerWallTexture.wrapT = RepeatWrapping;
+  sharedContainerWallTexture.repeat.set(3, 2);
+  return sharedContainerWallTexture;
+}
 
 function makeMarker(text, color, x, y, z) {
   const group = new Group();
@@ -107,10 +151,13 @@ export function createContainerGroup() {
 function createWallMesh({ geometry, position, rotation, color, opacity, face }) {
   const material = new MeshStandardMaterial({
     color,
+    map: getContainerWallTexture(),
     transparent: true,
     opacity,
-    roughness: 0.24,
-    metalness: 0.12,
+    roughness: 0.38,
+    metalness: 0.28,
+    emissive: color,
+    emissiveIntensity: 0.012,
     side: DoubleSide,
     depthWrite: false,
   });
@@ -125,6 +172,173 @@ function createWallMesh({ geometry, position, rotation, color, opacity, face }) 
   mesh.userData.face = face;
   mesh.userData.baseOpacity = opacity;
   return mesh;
+}
+
+function addContainerRail(group, { width, height, depth, position, color = 0x7dd3fc }) {
+  const rail = new Mesh(
+    new BoxGeometry(width, height, depth),
+    new MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.035,
+      roughness: 0.52,
+      metalness: 0.28,
+    })
+  );
+
+  rail.position.copy(position);
+  rail.castShadow = true;
+  rail.receiveShadow = true;
+  group.add(rail);
+}
+
+function addContainerRibs(group, width, height, depth) {
+  const ribCount = Math.max(5, Math.floor(depth / 95));
+  const zStart = -depth / 2;
+  const step = depth / ribCount;
+
+  for (let index = 0; index <= ribCount; index++) {
+    const z = zStart + index * step;
+    const ribColor = index === 0 || index === ribCount ? 0xfb923c : 0x38bdf8;
+
+    addContainerRail(group, {
+      width: 3.5,
+      height,
+      depth: 3.5,
+      position: new Vector3(-width / 2, height / 2, z),
+      color: ribColor,
+    });
+
+    addContainerRail(group, {
+      width: 3.5,
+      height,
+      depth: 3.5,
+      position: new Vector3(width / 2, height / 2, z),
+      color: ribColor,
+    });
+  }
+
+  const sidePanelCount = Math.max(10, Math.floor(depth / 48));
+  const sidePanelStep = depth / sidePanelCount;
+  for (let index = 0; index <= sidePanelCount; index++) {
+    const z = zStart + index * sidePanelStep;
+    const color = index % 2 === 0 ? 0x2f88c9 : 0x1d4f7a;
+
+    addContainerRail(group, {
+      width: 1.8,
+      height: height * 0.78,
+      depth: 2.4,
+      position: new Vector3(-width / 2 + 1.2, height * 0.5, z),
+      color,
+    });
+
+    addContainerRail(group, {
+      width: 1.8,
+      height: height * 0.78,
+      depth: 2.4,
+      position: new Vector3(width / 2 - 1.2, height * 0.5, z),
+      color,
+    });
+  }
+
+  const endPanelCount = Math.max(5, Math.floor(width / 34));
+  const xStart = -width / 2;
+  const endPanelStep = width / endPanelCount;
+  for (let index = 0; index <= endPanelCount; index++) {
+    const x = xStart + index * endPanelStep;
+
+    addContainerRail(group, {
+      width: 2.4,
+      height: height * 0.76,
+      depth: 1.8,
+      position: new Vector3(x, height * 0.5, -depth / 2 + 1.2),
+      color: 0x1f7f57,
+    });
+
+    addContainerRail(group, {
+      width: 2.4,
+      height: height * 0.76,
+      depth: 1.8,
+      position: new Vector3(x, height * 0.5, depth / 2 - 1.2),
+      color: 0xb85b1d,
+    });
+  }
+
+  [
+    { x: -width / 2, y: height, z: 0, railWidth: 4, railHeight: 4, railDepth: depth },
+    { x: width / 2, y: height, z: 0, railWidth: 4, railHeight: 4, railDepth: depth },
+    { x: 0, y: height, z: -depth / 2, railWidth: width, railHeight: 4, railDepth: 4 },
+    { x: 0, y: height, z: depth / 2, railWidth: width, railHeight: 4, railDepth: 4 },
+  ].forEach((rail) => {
+    addContainerRail(group, {
+      width: rail.railWidth,
+      height: rail.railHeight,
+      depth: rail.railDepth,
+      position: new Vector3(rail.x, rail.y, rail.z),
+    });
+  });
+
+  [
+    { x: -width / 2, z: -depth / 2, color: 0x22c55e },
+    { x: width / 2, z: -depth / 2, color: 0x22c55e },
+    { x: -width / 2, z: depth / 2, color: 0xfb923c },
+    { x: width / 2, z: depth / 2, color: 0xfb923c },
+  ].forEach((post) => {
+    addContainerRail(group, {
+      width: 7,
+      height: height + 2,
+      depth: 7,
+      position: new Vector3(post.x, height / 2, post.z),
+      color: post.color,
+    });
+  });
+}
+
+function addFloorLanes(group, width, depth) {
+  const plankCount = Math.max(8, Math.floor(width / 18));
+  const plankWidth = width / plankCount;
+
+  for (let index = 0; index < plankCount; index++) {
+    const color = index % 2 === 0 ? 0x6f5338 : 0x5b432d;
+    const plank = new Mesh(
+      new BoxGeometry(Math.max(2, plankWidth - 1.2), 1.2, depth * 0.94),
+      new MeshStandardMaterial({
+        color,
+        roughness: 0.92,
+        metalness: 0.01,
+      })
+    );
+
+    plank.position.set(-width / 2 + plankWidth * index + plankWidth / 2, 1.45, 0);
+    plank.receiveShadow = true;
+    group.add(plank);
+  }
+
+  const laneMaterial = new MeshStandardMaterial({
+    color: 0x22c55e,
+    emissive: 0x064e3b,
+    emissiveIntensity: 0.16,
+    transparent: true,
+    opacity: 0.2,
+    roughness: 0.86,
+    metalness: 0.02,
+    side: DoubleSide,
+  });
+
+  [
+    { x: -width / 4, color: 0x38bdf8 },
+    { x: 0, color: 0x22c55e },
+    { x: width / 4, color: 0xf59e0b },
+  ].forEach((lane) => {
+    const material = laneMaterial.clone();
+    material.color.setHex(lane.color);
+    material.emissive.setHex(lane.color);
+
+    const mesh = new Mesh(new PlaneGeometry(5, depth * 0.94), material);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(lane.x, 1.4, 0);
+    group.add(mesh);
+  });
 }
 
 export function updateContainerMesh({
@@ -145,7 +359,7 @@ export function updateContainerMesh({
     delete resolvedWallMeshes[key];
   });
 
-  const wallOpacity = Math.max(0.14, opacity * 0.95);
+  const wallOpacity = Math.max(0.2, opacity * 1.12);
   const shellGeo = new BoxGeometry(width, height, depth);
 
   const walls = [
@@ -203,17 +417,22 @@ export function updateContainerMesh({
   wire.position.set(0, height / 2, 0);
   group.add(wire);
 
+  addContainerRibs(group, width, height, depth);
+
   const deck = new Mesh(
     new PlaneGeometry(width, depth),
     new MeshStandardMaterial({
-      color: 0x1e3a5f,
-      roughness: 0.9,
-      metalness: 0.04,
+      color: 0x16324f,
+      emissive: 0x071827,
+      emissiveIntensity: 0.16,
+      roughness: 0.88,
+      metalness: 0.08,
     })
   );
   deck.rotation.x = -Math.PI / 2;
   deck.position.y = 0.8;
   group.add(deck);
+  addFloorLanes(group, width, depth);
 
   const innerGrid = new GridHelper(
     Math.max(width, depth),

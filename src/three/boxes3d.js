@@ -1,17 +1,27 @@
 import {
   BoxGeometry,
   CanvasTexture,
+  DoubleSide,
   EdgesGeometry,
   LineBasicMaterial,
   LineSegments,
   Mesh,
   MeshStandardMaterial,
+  PlaneGeometry,
 } from 'three';
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
 let sharedCartonTexture = null;
 const PREVIEW_LABEL_ROLE = 'preview-label';
-const PREVIEW_OUTLINE_ROLE = 'preview-outline';
+const CARTON_OUTLINE_ROLE = 'carton-outline';
+const CARTON_STRIPE_ROLE = 'carton-stripe';
+
+const ZONE_VISUALS = {
+  head: { base: 0x6b8f4e, accent: 0x22c55e },
+  middle: { base: 0x4f7398, accent: 0x38bdf8 },
+  door: { base: 0x9a6436, accent: 0xfb923c },
+  any: { base: 0x8b6a42, accent: 0xfacc15 },
+};
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -30,10 +40,18 @@ function getSharedCartonTexture() {
   canvas.height = 512;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#8b5a2b';
+  ctx.fillStyle = '#9b6a38';
   ctx.fillRect(0, 0, 512, 512);
-  ctx.strokeStyle = '#6b4226';
-  ctx.lineWidth = 4;
+
+  const grain = ctx.createLinearGradient(0, 0, 512, 512);
+  grain.addColorStop(0, 'rgba(255,255,255,0.16)');
+  grain.addColorStop(0.48, 'rgba(111,68,34,0.14)');
+  grain.addColorStop(1, 'rgba(0,0,0,0.16)');
+  ctx.fillStyle = grain;
+  ctx.fillRect(0, 0, 512, 512);
+
+  ctx.strokeStyle = 'rgba(91,55,27,0.58)';
+  ctx.lineWidth = 3;
 
   for (let i = 0; i < 20; i++) {
     ctx.beginPath();
@@ -42,8 +60,58 @@ function getSharedCartonTexture() {
     ctx.stroke();
   }
 
+  ctx.strokeStyle = 'rgba(251,191,36,0.45)';
+  ctx.lineWidth = 18;
+  ctx.beginPath();
+  ctx.moveTo(256, 0);
+  ctx.lineTo(256, 512);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(120,53,15,0.42)';
+  ctx.lineWidth = 2;
+  for (let y = 64; y < 512; y += 96) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(512, y + 18);
+    ctx.stroke();
+  }
+
   sharedCartonTexture = new CanvasTexture(canvas);
   return sharedCartonTexture;
+}
+
+function resolveZoneVisuals(meta = {}) {
+  const zone = ['head', 'middle', 'door'].includes(meta.deliveryZone) ? meta.deliveryZone : 'any';
+  const visual = ZONE_VISUALS[zone];
+
+  if (meta.sceneRole === 'preview') {
+    return { base: 0x4b8072, accent: 0x2dd4bf };
+  }
+
+  if (meta.noStack || meta.fragile) {
+    return { base: 0x8c4f58, accent: 0xfb7185 };
+  }
+
+  return visual;
+}
+
+function createCartonMaterial(meta = {}) {
+  const visual = resolveZoneVisuals(meta);
+  const material = new MeshStandardMaterial({
+    map: getSharedCartonTexture(),
+    color: visual.base,
+    roughness: 0.62,
+    metalness: 0.06,
+    emissive: visual.base,
+    emissiveIntensity: meta.isSelected ? 0.08 : 0.025,
+  });
+
+  material.userData = {
+    ...(material.userData || {}),
+    hasSharedTexture: true,
+  };
+
+  return material;
 }
 
 export function disposeBox(scene, box) {
@@ -78,13 +146,48 @@ export function disposeBox(scene, box) {
   });
 }
 
-function createPreviewOutline(mesh) {
+function createCartonOutline(mesh, color) {
   const edges = new LineSegments(
     new EdgesGeometry(mesh.geometry),
-    new LineBasicMaterial({ color: 0x22c55e })
+    new LineBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.78,
+    })
   );
-  edges.userData.decoratorRole = PREVIEW_OUTLINE_ROLE;
+  edges.userData.decoratorRole = CARTON_OUTLINE_ROLE;
   mesh.add(edges);
+}
+
+function createCartonTopStripe(mesh, color) {
+  const { w, h, d } = mesh.userData.size || {};
+
+  if (!w || !h || !d) return;
+
+  const stripe = new Mesh(
+    new PlaneGeometry(Math.max(8, w * 0.72), Math.max(4, d * 0.1)),
+    new MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.22,
+      transparent: true,
+      opacity: 0.7,
+      roughness: 0.5,
+      metalness: 0.02,
+      side: DoubleSide,
+    })
+  );
+
+  stripe.rotation.x = -Math.PI / 2;
+  stripe.position.set(0, h / 2 + 0.18, -d * 0.18);
+  stripe.userData.decoratorRole = CARTON_STRIPE_ROLE;
+  mesh.add(stripe);
+}
+
+function createCartonVisualDecorators(mesh) {
+  const visual = resolveZoneVisuals(mesh.userData || {});
+  createCartonOutline(mesh, visual.accent);
+  createCartonTopStripe(mesh, visual.accent);
 }
 
 function createSampleDimensionLabel(
@@ -117,8 +220,6 @@ function createSampleDimensionLabel(
   labelObject.visible = visible;
   labelObject.position.set(0, h / 2 + 22, 0);
   mesh.add(labelObject);
-
-  createPreviewOutline(mesh);
 
   mesh.userData.isSampleBox = true;
 }
@@ -178,6 +279,7 @@ export function updateCartonGeometry(box, { w, h, d }) {
   const wasSample = Boolean(box.userData.isSampleBox);
   box.userData.isSampleBox = false;
   clearBoxDecorators(box);
+  createCartonVisualDecorators(box);
 
   if (wasSample) {
     createSampleDimensionLabel(box, {
@@ -250,17 +352,7 @@ export function createCarton(
   { w, h, d, x, y, z, weight, isSample = false, label = 'Thùng', previewQuantity = 0, meta = {} }
 ) {
   const geo = new BoxGeometry(w, h, d);
-  const mat = new MeshStandardMaterial({
-    map: getSharedCartonTexture(),
-    roughness: 0.7,
-    metalness: 0.05,
-    emissive: 0x000000,
-    emissiveIntensity: 0,
-  });
-  mat.userData = {
-    ...(mat.userData || {}),
-    hasSharedTexture: true,
-  };
+  const mat = createCartonMaterial(meta);
 
   const mesh = new Mesh(geo, mat);
   mesh.position.set(x, y, z);
@@ -277,6 +369,8 @@ export function createCarton(
     clippingPlanes: null,
     ...meta,
   };
+
+  createCartonVisualDecorators(mesh);
 
   if (isSample) {
     createSampleDimensionLabel(mesh, {
