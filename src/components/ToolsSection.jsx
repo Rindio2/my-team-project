@@ -68,14 +68,14 @@ export default function ToolsSection() {
       </div>
 
       <div className="slider-container">
-        <span>🔆 Độ mờ</span>
+        <span>🔆 Vỏ container</span>
         <input
           type="range"
           id="opacitySlider"
-          min="0.1"
-          max="0.9"
+          min="0.16"
+          max="0.95"
           step="0.01"
-          defaultValue="0.18"
+          defaultValue="0.62"
         />
       </div>
 
@@ -87,7 +87,7 @@ export default function ToolsSection() {
       <div className="viewer-control-grid">
         <div className="input-group">
           <label>Ẩn vách gần camera</label>
-          <select id="wallOcclusionMode" defaultValue="hide">
+          <select id="wallOcclusionMode" defaultValue="fade">
             <option value="hide">Ẩn hẳn vách gần nhất</option>
             <option value="fade">Làm mờ vách gần nhất</option>
           </select>

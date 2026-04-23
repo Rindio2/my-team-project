@@ -10,6 +10,7 @@ import {
   LineBasicMaterial,
   LineSegments,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   RepeatWrapping,
@@ -59,6 +60,52 @@ function getContainerWallTexture() {
   return sharedContainerWallTexture;
 }
 
+function createContainerDecalTexture({
+  title,
+  subtitle,
+  footer,
+  accent = '#fbbf24',
+  background = 'rgba(2,6,23,0.72)',
+}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = background;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 8;
+  ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
+
+  ctx.fillStyle = accent;
+  ctx.font = '700 56px Arial, sans-serif';
+  ctx.fillText(title, 34, 82);
+
+  ctx.fillStyle = '#e5e7eb';
+  ctx.font = '700 34px Arial, sans-serif';
+  ctx.fillText(subtitle, 34, 136);
+
+  ctx.fillStyle = '#bae6fd';
+  ctx.font = '600 24px Arial, sans-serif';
+  ctx.fillText(footer, 34, 190);
+
+  ctx.fillStyle = 'rgba(251,191,36,0.8)';
+  for (let x = 330; x < 480; x += 34) {
+    ctx.beginPath();
+    ctx.moveTo(x, 210);
+    ctx.lineTo(x + 18, 210);
+    ctx.lineTo(x - 22, 242);
+    ctx.lineTo(x - 40, 242);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  const texture = new CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
 function makeMarker(text, color, x, y, z) {
   const group = new Group();
 
@@ -97,8 +144,14 @@ function disposeObject3D(object) {
 
   if (object.material) {
     if (Array.isArray(object.material)) {
-      object.material.forEach((m) => m.dispose?.());
+      object.material.forEach((m) => {
+        if (m.map && !m.userData?.hasSharedTexture) m.map.dispose?.();
+        m.dispose?.();
+      });
     } else {
+      if (object.material.map && !object.material.userData?.hasSharedTexture) {
+        object.material.map.dispose?.();
+      }
       object.material.dispose?.();
     }
   }
@@ -162,6 +215,11 @@ function createWallMesh({ geometry, position, rotation, color, opacity, face }) 
     depthWrite: false,
   });
 
+  material.userData = {
+    ...(material.userData || {}),
+    hasSharedTexture: true,
+  };
+
   const mesh = new Mesh(
     geometry,
     material
@@ -193,6 +251,49 @@ function addContainerRail(group, { width, height, depth, position, color = 0x7dd
   return rail;
 }
 
+function addDecalPlane(group, { width, height, position, rotation, texture, opacity = 0.88 }) {
+  const decal = new Mesh(
+    new PlaneGeometry(width, height),
+    new MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity,
+      side: DoubleSide,
+      depthWrite: false,
+    })
+  );
+
+  decal.position.copy(position);
+  decal.rotation.set(rotation.x, rotation.y, rotation.z);
+  group.add(decal);
+}
+
+function addContainerPanel(group, { width, height, depth, position, color, opacity = 0.46 }) {
+  const material = new MeshStandardMaterial({
+    color,
+    map: getContainerWallTexture(),
+    transparent: true,
+    opacity,
+    roughness: 0.44,
+    metalness: 0.24,
+    emissive: color,
+    emissiveIntensity: 0.018,
+    depthWrite: false,
+  });
+
+  material.userData = {
+    ...(material.userData || {}),
+    hasSharedTexture: true,
+  };
+
+  const panel = new Mesh(new BoxGeometry(width, height, depth), material);
+  panel.position.copy(position);
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+  group.add(panel);
+  return panel;
+}
+
 function addCornerCasting(group, x, y, z, color = 0x0f172a) {
   addContainerRail(group, {
     width: 13,
@@ -208,6 +309,20 @@ function addDoorHardware(group, width, height, depth) {
   const doorColor = 0xc65d1e;
   const hardwareColor = 0xe5e7eb;
   const shadowColor = 0x7c2d12;
+
+  [
+    { x: -width / 4, panelColor: 0xba4d16 },
+    { x: width / 4, panelColor: 0xd9651f },
+  ].forEach((door) => {
+    addContainerPanel(group, {
+      width: width / 2 - 9,
+      height: height * 0.78,
+      depth: 2.2,
+      position: new Vector3(door.x, height * 0.5, depth / 2 + 2.2),
+      color: door.panelColor,
+      opacity: 0.72,
+    });
+  });
 
   [
     { x: -width / 4, railWidth: width / 2 - 10 },
@@ -294,6 +409,40 @@ function addDoorHardware(group, width, height, depth) {
   });
 }
 
+function addForkliftPocketsAndSkids(group, width, depth) {
+  const skidColor = 0x111827;
+  const pocketColor = 0x020617;
+
+  [-width * 0.32, width * 0.32].forEach((x) => {
+    addContainerRail(group, {
+      width: 10,
+      height: 5,
+      depth: depth * 0.9,
+      position: new Vector3(x, -4.8, 0),
+      color: skidColor,
+    });
+  });
+
+  [-depth * 0.22, depth * 0.22].forEach((z) => {
+    [-width / 2 - 2.2, width / 2 + 2.2].forEach((x) => {
+      addContainerRail(group, {
+        width: 3,
+        height: 12,
+        depth: 38,
+        position: new Vector3(x, 14, z),
+        color: pocketColor,
+      });
+      addContainerRail(group, {
+        width: 3,
+        height: 3,
+        depth: 46,
+        position: new Vector3(x, 21.5, z),
+        color: 0xeab308,
+      });
+    });
+  });
+}
+
 function addHeadWallDetails(group, width, height, depth) {
   const z = -depth / 2 - 4.5;
   const headColor = 0x15803d;
@@ -340,6 +489,61 @@ function addRoofCorrugations(group, width, height, depth) {
       color: index % 2 === 0 ? 0x7dd3fc : 0x2563eb,
     });
   }
+}
+
+function addContainerDecals(group, width, height, depth) {
+  const sideTexture = createContainerDecalTexture({
+    title: 'PCKU 2026',
+    subtitle: 'PACKET OPT',
+    footer: 'MAX GROSS 30,480 KG',
+    accent: '#facc15',
+  });
+  const doorTexture = createContainerDecalTexture({
+    title: 'CAUTION',
+    subtitle: 'HIGH CUBE',
+    footer: 'SEAL CHECK | DOOR SIDE',
+    accent: '#fb923c',
+    background: 'rgba(124,45,18,0.72)',
+  });
+  const headTexture = createContainerDecalTexture({
+    title: 'FRONT',
+    subtitle: 'LOAD PLAN',
+    footer: 'CENTER OF GRAVITY SAFE',
+    accent: '#22c55e',
+    background: 'rgba(6,78,59,0.72)',
+  });
+
+  addDecalPlane(group, {
+    width: depth * 0.26,
+    height: height * 0.18,
+    position: new Vector3(width / 2 + 4.2, height * 0.62, -depth * 0.12),
+    rotation: new Euler(0, Math.PI / 2, 0),
+    texture: sideTexture,
+  });
+
+  addDecalPlane(group, {
+    width: depth * 0.26,
+    height: height * 0.18,
+    position: new Vector3(-width / 2 - 4.2, height * 0.62, -depth * 0.12),
+    rotation: new Euler(0, -Math.PI / 2, 0),
+    texture: sideTexture.clone(),
+  });
+
+  addDecalPlane(group, {
+    width: width * 0.38,
+    height: height * 0.18,
+    position: new Vector3(0, height * 0.66, depth / 2 + 8.8),
+    rotation: new Euler(0, 0, 0),
+    texture: doorTexture,
+  });
+
+  addDecalPlane(group, {
+    width: width * 0.38,
+    height: height * 0.18,
+    position: new Vector3(0, height * 0.64, -depth / 2 - 8.8),
+    rotation: new Euler(0, Math.PI, 0),
+    texture: headTexture,
+  });
 }
 
 function addContainerRibs(group, width, height, depth) {
@@ -453,6 +657,8 @@ function addContainerRibs(group, width, height, depth) {
   addDoorHardware(group, width, height, depth);
   addHeadWallDetails(group, width, height, depth);
   addRoofCorrugations(group, width, height, depth);
+  addForkliftPocketsAndSkids(group, width, depth);
+  addContainerDecals(group, width, height, depth);
 }
 
 function addFloorLanes(group, width, depth) {
@@ -520,7 +726,7 @@ export function updateContainerMesh({
     delete resolvedWallMeshes[key];
   });
 
-  const wallOpacity = Math.max(0.2, opacity * 1.12);
+  const wallOpacity = Math.max(0.52, opacity * 1.05);
   const shellGeo = new BoxGeometry(width, height, depth);
 
   const walls = [
@@ -561,7 +767,7 @@ export function updateContainerMesh({
       position: new Vector3(0, height, 0),
       rotation: new Euler(Math.PI / 2, 0, 0),
       color: 0x82c9ff,
-      opacity: Math.max(0.1, wallOpacity * 0.72),
+      opacity: Math.max(0.45, wallOpacity * 0.86),
       face: 'top',
     }),
   ];
