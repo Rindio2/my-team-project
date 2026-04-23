@@ -48,6 +48,10 @@ assert.ok(
   packingResult.evaluatedStrategies.some((strategy) => strategy.id === 'pct-online-policy'),
   'Smoke test yêu cầu optimizer chạy chiến lược PCT Online AI.'
 );
+assert.ok(
+  packingResult.evaluatedStrategies.some((strategy) => strategy.id === 'pct-flex-zone-policy'),
+  'Smoke test yêu cầu optimizer chạy chiến lược PCT Flex Zone AI.'
+);
 
 const preflight = runCommercialPreflight({
   items: manifest,

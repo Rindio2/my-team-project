@@ -6,7 +6,7 @@ const CONTACT_EPSILON = 0.000001;
 const FACE_SNAP_TOLERANCE = 1.25;
 const MIN_SUPPORT_RATIO = 0.78;
 const PACKING_ALGORITHM_LABEL =
-  'Manifest-aware strategy dispatch + PCT-inspired online policy + adaptive anchor search + skip-branch beam + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
+  'Manifest-aware strategy dispatch + PCT-inspired online policy + adaptive reorder beam + adaptive anchor search + skip-branch beam + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
 
 function resolveStackLimit(rawLimit) {
   const value = Number(rawLimit);
@@ -206,6 +206,31 @@ function defaultItemComparator(a, b) {
   return Number(b.weight || 0) - Number(a.weight || 0);
 }
 
+function pctOnlineItemComparator(a, b) {
+  const specificityDiff = getZoneSpecificity(b.deliveryZone) - getZoneSpecificity(a.deliveryZone);
+  if (specificityDiff !== 0) return specificityDiff;
+
+  if (b.deliveryOrder !== a.deliveryOrder) {
+    return b.deliveryOrder - a.deliveryOrder;
+  }
+
+  const difficultyDiff = getPackingDifficulty(b) - getPackingDifficulty(a);
+  if (difficultyDiff !== 0) return difficultyDiff;
+
+  if (a.fragile !== b.fragile) {
+    return Number(a.fragile) - Number(b.fragile);
+  }
+
+  const densityA = getDensity(a);
+  const densityB = getDensity(b);
+  if (densityB !== densityA) return densityB - densityA;
+
+  const volDiff = getVolume(b) - getVolume(a);
+  if (volDiff !== 0) return volDiff;
+
+  return defaultItemComparator(a, b);
+}
+
 const STRATEGY_PRESETS = [
   {
     id: 'delivery-balanced',
@@ -267,35 +292,31 @@ const STRATEGY_PRESETS = [
     pointSortMode: 'pct-deep-bottom-left',
     anchorMode: 'pct-online',
     scoringProfile: 'pct',
-    searchMode: 'beam',
+    searchMode: 'adaptive-beam',
     allowSkipBranch: true,
+    allowSoftZoneOverflow: false,
     beamWidth: 4,
     branchFactor: 2,
     beamLookaheadCount: 16,
-    itemComparator: (a, b) => {
-      const specificityDiff = getZoneSpecificity(b.deliveryZone) - getZoneSpecificity(a.deliveryZone);
-      if (specificityDiff !== 0) return specificityDiff;
-
-      if (b.deliveryOrder !== a.deliveryOrder) {
-        return b.deliveryOrder - a.deliveryOrder;
-      }
-
-      const difficultyDiff = getPackingDifficulty(b) - getPackingDifficulty(a);
-      if (difficultyDiff !== 0) return difficultyDiff;
-
-      if (a.fragile !== b.fragile) {
-        return Number(a.fragile) - Number(b.fragile);
-      }
-
-      const densityA = getDensity(a);
-      const densityB = getDensity(b);
-      if (densityB !== densityA) return densityB - densityA;
-
-      const volDiff = getVolume(b) - getVolume(a);
-      if (volDiff !== 0) return volDiff;
-
-      return defaultItemComparator(a, b);
-    },
+    reorderWindow: 5,
+    fillerWindow: 10,
+    itemComparator: pctOnlineItemComparator,
+  },
+  {
+    id: 'pct-flex-zone-policy',
+    label: 'PCT Flex Zone AI',
+    pointSortMode: 'pct-deep-bottom-left',
+    anchorMode: 'pct-online',
+    scoringProfile: 'pct',
+    searchMode: 'adaptive-beam',
+    allowSkipBranch: true,
+    allowSoftZoneOverflow: true,
+    beamWidth: 4,
+    branchFactor: 2,
+    beamLookaheadCount: 16,
+    reorderWindow: 5,
+    fillerWindow: 10,
+    itemComparator: pctOnlineItemComparator,
   },
   {
     id: 'heavy-base',
@@ -474,6 +495,18 @@ function getDeliveryZoneRange(deliveryZone, container) {
 function isInsideDeliveryZone(box, container) {
   const range = getDeliveryZoneRange(box.deliveryZone, container);
   return box.z >= range.min - EPSILON && box.z + box.d <= range.max + EPSILON;
+}
+
+function getZoneOverflowRatio(box, container) {
+  const zone = normalizeDeliveryZone(box.deliveryZone);
+  if (zone === 'any') return 0;
+
+  const range = getDeliveryZoneRange(zone, container);
+  const zoneDepth = Math.max(EPSILON, range.max - range.min);
+  const startOverflow = Math.max(0, range.min - box.z);
+  const endOverflow = Math.max(0, box.z + box.d - range.max);
+
+  return (startOverflow + endOverflow) / zoneDepth;
 }
 
 function getZonePenalty(box, container) {
@@ -982,6 +1015,7 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
       floorCoverageBonus: 170,
       densityBaseBonus: 0.018,
       zoneCenterPenalty: 54,
+      zoneOverflowPenalty: 980,
     },
   };
 
@@ -1008,6 +1042,7 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
     floorCoverageRatio * (profile.floorCoverageBonus || 0) +
     (box.y <= EPSILON ? densityKgM3 * (profile.densityBaseBonus || 0) : 0);
   const zoneCenterPenalty = getDeliveryZoneCenterPenalty(box, container) * (profile.zoneCenterPenalty || 0);
+  const zoneOverflowPenalty = getZoneOverflowRatio(box, container) * (profile.zoneOverflowPenalty || 0);
 
   return (
     contactBonus -
@@ -1018,6 +1053,7 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
     supportPenalty +
     getZonePenalty(box, container) +
       zoneCenterPenalty +
+      zoneOverflowPenalty +
       balancePenalty +
       envelopePenalty
     )
@@ -1416,7 +1452,7 @@ function violatesRules({
   placedById,
   floorLoadLimit,
 }) {
-  if (!isInsideDeliveryZone(placement, container)) {
+  if (!isInsideDeliveryZone(placement, container) && !placement.softZoneOverflowAllowed) {
     return { isValid: false, reason: 'Không đúng vùng xếp ưu tiên' };
   }
 
@@ -1495,7 +1531,7 @@ function applyPlacementStateUpdates(placement, placedById) {
   });
 }
 
-function buildPlacementCandidate(item, orientation, point, nextPlacementId) {
+function buildPlacementCandidate(item, orientation, point, nextPlacementId, strategy = {}) {
   return {
     id: item.id || `placement-${nextPlacementId}`,
     x: point.x,
@@ -1523,6 +1559,7 @@ function buildPlacementCandidate(item, orientation, point, nextPlacementId) {
     stackLimit: item.stackLimit,
     maxLoadAbove: item.maxLoadAbove,
     deliveryZone: item.deliveryZone,
+    softZoneOverflowAllowed: Boolean(strategy.allowSoftZoneOverflow),
   };
 }
 
@@ -1636,7 +1673,7 @@ function enumeratePlacementCandidates({
     });
 
     for (const point of pointsForOrientation) {
-      const candidate = buildPlacementCandidate(item, orientation, point, nextPlacementId);
+      const candidate = buildPlacementCandidate(item, orientation, point, nextPlacementId, strategy);
 
       if (!fitsInside(container, candidate)) continue;
       if (collides(candidate, placed)) continue;
@@ -1832,6 +1869,20 @@ function clonePackingState(state) {
   };
 }
 
+function createAdaptivePackingState(items) {
+  return {
+    ...createPackingState(),
+    remainingItems: items.map((item, index) => normalizeBoxType(item, item.typeIndex ?? index)),
+  };
+}
+
+function cloneAdaptivePackingState(state) {
+  return {
+    ...clonePackingState(state),
+    remainingItems: (state.remainingItems || []).map((item) => ({ ...item })),
+  };
+}
+
 function scorePackingState(state, container) {
   const envelopeMetrics = getEnvelopeMetrics(state.placed, container);
   const balanceMetrics = getLoadBalanceMetrics(state.placed, container);
@@ -1878,6 +1929,50 @@ function getSkipBranchPenalty(item) {
   );
 }
 
+function getRejectedItemPenalty(item, reason = 'space') {
+  const reasonMultiplier = reason === 'weight' ? 0.65 : reason === 'constraint' ? 1.35 : 1;
+
+  return getSkipBranchPenalty(item) * reasonMultiplier;
+}
+
+function removeRemainingItemAt(items, removeIndex) {
+  return items.filter((_, index) => index !== removeIndex);
+}
+
+function getAdaptiveItemChoices(remainingItems, strategy) {
+  const reorderWindow = Math.max(
+    1,
+    Math.min(Number(strategy.reorderWindow || 4), remainingItems.length)
+  );
+  const fillerWindow = Math.max(
+    reorderWindow,
+    Math.min(Number(strategy.fillerWindow || reorderWindow), remainingItems.length)
+  );
+  const choices = remainingItems.slice(0, reorderWindow).map((item, index) => ({
+    item,
+    itemIndex: index,
+  }));
+  const seen = new Set(choices.map((choice) => choice.item.id));
+
+  const fillerChoice = remainingItems
+    .slice(reorderWindow, fillerWindow)
+    .map((item, index) => ({
+      item,
+      itemIndex: reorderWindow + index,
+      score: getFootprint(item) + getVolume(item) / 5000 - getPackingDifficulty(item) * 0.18,
+    }))
+    .sort((a, b) => a.score - b.score)[0];
+
+  if (fillerChoice && !seen.has(fillerChoice.item.id)) {
+    choices.push({
+      item: fillerChoice.item,
+      itemIndex: fillerChoice.itemIndex,
+    });
+  }
+
+  return choices;
+}
+
 function pruneBeamStates(states, container, beamWidth) {
   const bestBySignature = new Map();
 
@@ -1895,6 +1990,154 @@ function pruneBeamStates(states, container, beamWidth) {
     .sort((a, b) => b.score - a.score)
     .slice(0, beamWidth)
     .map((entry) => entry.state);
+}
+
+function runAdaptiveReorderBeamPack({
+  container,
+  boxes,
+  strategy,
+  maxWeight,
+  floorLoadLimit,
+}) {
+  const itemCount = boxes.length;
+  const beamWidth = Math.max(
+    2,
+    Math.min(Number(strategy.beamWidth || 4), itemCount > 36 ? 5 : 7)
+  );
+  const branchFactor = Math.max(
+    2,
+    Math.min(Number(strategy.branchFactor || 2), itemCount > 30 ? 2 : 3)
+  );
+  const beamLookaheadCount = Math.max(
+    4,
+    Math.min(Number(strategy.beamLookaheadCount || 14), itemCount)
+  );
+
+  let states = [createAdaptivePackingState(boxes)];
+
+  for (let step = 0; step < itemCount; step++) {
+    const nextStates = [];
+
+    states.forEach((state) => {
+      if (!state.remainingItems?.length) {
+        nextStates.push(state);
+        return;
+      }
+
+      const activeBranchFactor = step < beamLookaheadCount ? branchFactor : 1;
+      const choices = getAdaptiveItemChoices(state.remainingItems, strategy);
+
+      choices.forEach(({ item, itemIndex }) => {
+        const remainingAfterChoice = removeRemainingItemAt(state.remainingItems, itemIndex);
+
+        if (state.totalPlacedWeight + item.weight > maxWeight) {
+          const nextState = cloneAdaptivePackingState(state);
+          nextState.remainingItems = remainingAfterChoice;
+          nextState.rejectedByWeight.push(item);
+          nextState.searchScore -= getRejectedItemPenalty(item, 'weight');
+          nextStates.push(nextState);
+          return;
+        }
+
+        const { placements, constraintReasons } = enumeratePlacementCandidates({
+          item,
+          placed: state.placed,
+          candidatePoints: state.candidatePoints,
+          placedById: state.placedById,
+          container,
+          strategy,
+          floorLoadLimit,
+          nextPlacementId: state.nextPlacementId,
+        });
+
+        if (placements.length === 0) {
+          const nextState = cloneAdaptivePackingState(state);
+          const rejectedItem =
+            constraintReasons.size > 0
+              ? {
+                  ...item,
+                  reason: [...constraintReasons].slice(0, 2).join(' / '),
+                }
+              : item;
+
+          nextState.remainingItems = remainingAfterChoice;
+
+          if (constraintReasons.size > 0) {
+            nextState.rejectedByConstraint.push(rejectedItem);
+            nextState.searchScore -= getRejectedItemPenalty(item, 'constraint');
+          } else {
+            nextState.rejectedBySpace.push(rejectedItem);
+            nextState.searchScore -= getRejectedItemPenalty(item, 'space');
+          }
+
+          nextStates.push(nextState);
+          return;
+        }
+
+        if (
+          strategy.allowSkipBranch &&
+          step < beamLookaheadCount &&
+          state.remainingItems.length > 1 &&
+          itemIndex === 0
+        ) {
+          const skippedState = cloneAdaptivePackingState(state);
+          skippedState.remainingItems = remainingAfterChoice;
+          skippedState.rejectedBySpace.push({
+            ...item,
+            reason: 'PCT adaptive beam: bỏ nhánh item này để tránh khóa layout tổng thể',
+          });
+          skippedState.searchScore -= getSkipBranchPenalty(item);
+          nextStates.push(skippedState);
+        }
+
+        placements.slice(0, activeBranchFactor).forEach((placement) => {
+          const nextState = cloneAdaptivePackingState(state);
+          const appliedPlacement = clonePlacementBox(placement);
+
+          nextState.remainingItems = remainingAfterChoice;
+          nextState.placed.push(appliedPlacement);
+          nextState.placedById.set(appliedPlacement.id, appliedPlacement);
+          nextState.totalPlacedWeight += item.weight;
+          nextState.searchScore +=
+            appliedPlacement.score +
+            getPackingDifficulty(item) * 0.12 +
+            Number(item.priorityGroup || item.deliveryOrder || 1) * 180;
+          applyPlacementStateUpdates(appliedPlacement, nextState.placedById);
+          nextState.candidatePoints = updateCandidatePoints(
+            nextState.candidatePoints,
+            appliedPlacement,
+            nextState.placed,
+            container,
+            strategy.pointSortMode
+          );
+          nextState.nextPlacementId += 1;
+
+          nextStates.push(nextState);
+        });
+      });
+    });
+
+    states = pruneBeamStates(nextStates, container, beamWidth);
+
+    if (states.every((state) => !state.remainingItems?.length)) {
+      break;
+    }
+  }
+
+  const bestState = states.reduce((best, state) => {
+    if (!best) return state;
+    return scorePackingState(state, container) > scorePackingState(best, container)
+      ? state
+      : best;
+  }, null);
+
+  return {
+    placed: bestState?.placed || [],
+    rejectedBySpace: bestState?.rejectedBySpace || [],
+    rejectedByWeight: bestState?.rejectedByWeight || [],
+    rejectedByConstraint: bestState?.rejectedByConstraint || [],
+    totalPlacedWeight: bestState?.totalPlacedWeight || 0,
+  };
 }
 
 function runBeamPack({
@@ -2148,8 +2391,16 @@ function buildFinalResult({
   const balanceMetrics = getLoadBalanceMetrics(placed, container);
   const balanceWarnings = getBalanceWarnings(balanceMetrics, container);
   const strictOverlapDetected = hasAnyOverlap(placed);
+  const softZoneOverflowCount = placed.filter(
+    (box) => box.softZoneOverflowAllowed && !isInsideDeliveryZone(box, container)
+  ).length;
   const effectiveBalanceWarnings = strictOverlapDetected
     ? ['Phat hien box giao nhau, layout nay khong hop le', ...balanceWarnings]
+    : softZoneOverflowCount > 0
+      ? [
+          `${softZoneOverflowCount} item duoc xep tran delivery zone co kiem soat de tang fill-rate; can review thu tu do hang truoc khi chot.`,
+          ...balanceWarnings,
+        ]
     : balanceWarnings;
 
   return {
@@ -2175,6 +2426,7 @@ function buildFinalResult({
     occupiedHeight,
     occupiedDepth,
     strictOverlapDetected,
+    softZoneOverflowCount,
     loadBalance: balanceMetrics,
     balanceWarnings: effectiveBalanceWarnings,
     rejectedBySpaceCount: rejectedBySpace.length,
@@ -2277,7 +2529,15 @@ function runPackingStrategy({
     rejectedByConstraint,
     totalPlacedWeight,
   } =
-    strategy.searchMode === 'beam'
+    strategy.searchMode === 'adaptive-beam'
+      ? runAdaptiveReorderBeamPack({
+          container,
+          boxes: items,
+          strategy,
+          maxWeight,
+          floorLoadLimit,
+        })
+      : strategy.searchMode === 'beam'
       ? runBeamPack({
           container,
           boxes: items,

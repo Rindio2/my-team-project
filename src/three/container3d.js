@@ -190,6 +190,156 @@ function addContainerRail(group, { width, height, depth, position, color = 0x7dd
   rail.castShadow = true;
   rail.receiveShadow = true;
   group.add(rail);
+  return rail;
+}
+
+function addCornerCasting(group, x, y, z, color = 0x0f172a) {
+  addContainerRail(group, {
+    width: 13,
+    height: 9,
+    depth: 13,
+    position: new Vector3(x, y, z),
+    color,
+  });
+}
+
+function addDoorHardware(group, width, height, depth) {
+  const z = depth / 2 + 4.8;
+  const doorColor = 0xc65d1e;
+  const hardwareColor = 0xe5e7eb;
+  const shadowColor = 0x7c2d12;
+
+  [
+    { x: -width / 4, railWidth: width / 2 - 10 },
+    { x: width / 4, railWidth: width / 2 - 10 },
+  ].forEach((door) => {
+    addContainerRail(group, {
+      width: door.railWidth,
+      height: 3,
+      depth: 3,
+      position: new Vector3(door.x, height * 0.16, z),
+      color: doorColor,
+    });
+    addContainerRail(group, {
+      width: door.railWidth,
+      height: 3,
+      depth: 3,
+      position: new Vector3(door.x, height * 0.84, z),
+      color: doorColor,
+    });
+    addContainerRail(group, {
+      width: 3,
+      height: height * 0.72,
+      depth: 3,
+      position: new Vector3(door.x - door.railWidth / 2, height * 0.5, z),
+      color: doorColor,
+    });
+    addContainerRail(group, {
+      width: 3,
+      height: height * 0.72,
+      depth: 3,
+      position: new Vector3(door.x + door.railWidth / 2, height * 0.5, z),
+      color: doorColor,
+    });
+  });
+
+  addContainerRail(group, {
+    width: 5,
+    height: height * 0.82,
+    depth: 5,
+    position: new Vector3(0, height * 0.5, z + 1.2),
+    color: shadowColor,
+  });
+
+  [-width * 0.32, -width * 0.12, width * 0.12, width * 0.32].forEach((x) => {
+    addContainerRail(group, {
+      width: 3,
+      height: height * 0.72,
+      depth: 4,
+      position: new Vector3(x, height * 0.5, z + 2.4),
+      color: hardwareColor,
+    });
+
+    [height * 0.24, height * 0.5, height * 0.76].forEach((y) => {
+      addContainerRail(group, {
+        width: 13,
+        height: 4,
+        depth: 5,
+        position: new Vector3(x, y, z + 3.2),
+        color: hardwareColor,
+      });
+    });
+  });
+
+  [-width / 2 + 10, width / 2 - 10].forEach((x) => {
+    [height * 0.22, height * 0.42, height * 0.64, height * 0.84].forEach((y) => {
+      addContainerRail(group, {
+        width: 7,
+        height: 16,
+        depth: 7,
+        position: new Vector3(x, y, z + 3.8),
+        color: hardwareColor,
+      });
+    });
+  });
+
+  [-width * 0.08, width * 0.08].forEach((x) => {
+    addContainerRail(group, {
+      width: 22,
+      height: 4,
+      depth: 6,
+      position: new Vector3(x, height * 0.46, z + 4.6),
+      color: 0xfbbf24,
+    });
+  });
+}
+
+function addHeadWallDetails(group, width, height, depth) {
+  const z = -depth / 2 - 4.5;
+  const headColor = 0x15803d;
+
+  addContainerRail(group, {
+    width: width * 0.94,
+    height: 4,
+    depth: 4,
+    position: new Vector3(0, height * 0.16, z),
+    color: headColor,
+  });
+  addContainerRail(group, {
+    width: width * 0.94,
+    height: 4,
+    depth: 4,
+    position: new Vector3(0, height * 0.84, z),
+    color: headColor,
+  });
+
+  const ribCount = Math.max(4, Math.floor(width / 44));
+  for (let index = 0; index <= ribCount; index++) {
+    const x = -width * 0.47 + (width * 0.94 * index) / ribCount;
+    addContainerRail(group, {
+      width: 3,
+      height: height * 0.68,
+      depth: 4,
+      position: new Vector3(x, height * 0.5, z + 1.5),
+      color: headColor,
+    });
+  }
+}
+
+function addRoofCorrugations(group, width, height, depth) {
+  const ridgeCount = Math.max(8, Math.floor(width / 28));
+  const step = width / ridgeCount;
+
+  for (let index = 0; index <= ridgeCount; index++) {
+    const x = -width / 2 + index * step;
+    addContainerRail(group, {
+      width: 2.2,
+      height: 3,
+      depth: depth * 0.96,
+      position: new Vector3(x, height + 3.2, 0),
+      color: index % 2 === 0 ? 0x7dd3fc : 0x2563eb,
+    });
+  }
 }
 
 function addContainerRibs(group, width, height, depth) {
@@ -292,6 +442,17 @@ function addContainerRibs(group, width, height, depth) {
       color: post.color,
     });
   });
+
+  [-width / 2, width / 2].forEach((x) => {
+    [-depth / 2, depth / 2].forEach((z) => {
+      addCornerCasting(group, x, -2.4, z);
+      addCornerCasting(group, x, height + 3.4, z);
+    });
+  });
+
+  addDoorHardware(group, width, height, depth);
+  addHeadWallDetails(group, width, height, depth);
+  addRoofCorrugations(group, width, height, depth);
 }
 
 function addFloorLanes(group, width, depth) {

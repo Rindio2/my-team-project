@@ -4,8 +4,8 @@
 
 ## Những gì đã có
 
-- Dựng mô phỏng container 3D giống thực tế hơn: vách corrugated, khung góc, sàn plank, nhãn đầu/cửa và màu box theo zone/rủi ro.
-- Chạy `AI Cơ bản`, `AI Pro` và heuristic `Sắp xếp tối ưu`, có nhánh `PCT Online AI` lấy cảm hứng từ Online 3D-BPP-PCT nhưng được viết lại bằng JS để chạy offline trong browser; bản hiện tại có adaptive anchor search và skip-branch beam.
+- Dựng mô phỏng container 3D giống thực tế hơn: vách corrugated, khung góc/corner casting, cửa sau có bản lề/thanh khóa, sàn plank, mái gân, nhãn đầu/cửa và màu box theo zone/rủi ro.
+- Chạy `AI Cơ bản`, `AI Pro` và heuristic `Sắp xếp tối ưu`, có nhánh `PCT Online AI` và `PCT Flex Zone AI` lấy cảm hứng từ Online 3D-BPP-PCT nhưng được viết lại bằng JS để chạy offline trong browser; bản hiện tại có adaptive reorder beam, adaptive anchor search và skip-branch beam.
 - Kiểm tra tải trọng, `noStack`, `noTilt`, xoay hướng, tải sàn, cân bằng tải, `deliveryZone`, `stackLimit`, `maxLoadAbove`.
 - Chỉnh tay box trong scene, undo/redo, lưu và khôi phục scene.
 - Tính sức chứa, dựng layout từ sức chứa và hiển thị chống sốc.

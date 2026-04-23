@@ -3,6 +3,7 @@ const STRATEGY_LABELS = {
   'largest-first': 'Kien lon truoc',
   'space-max-beam': 'Lap day khong gian',
   'pct-online-policy': 'PCT Online AI',
+  'pct-flex-zone-policy': 'PCT Flex Zone AI',
   'heavy-base': 'Nen chiu tai',
   'unload-friendly': 'Uu tien do hang',
 };
@@ -167,9 +168,11 @@ function buildStrategyScores(profile) {
     addScore('space-max-beam', 6, 'Ap luc the tich cao');
     addScore('largest-first', 2, 'Nhieu units can lap nhanh khong gian');
     addScore('pct-online-policy', 3, 'Can anchor search de tranh khoa som khong gian container');
+    addScore('pct-flex-zone-policy', 3, 'Can flex zone co canh bao khi ap luc the tich cao');
   } else if (profile.volumeDemandRatio >= 0.68) {
     addScore('space-max-beam', 3, 'Manifest can compact manh');
     addScore('pct-online-policy', 2, 'Can thu them anchor points theo zone va layer');
+    addScore('pct-flex-zone-policy', 2, 'Can them nhanh overflow co kiem soat');
   }
 
   if (profile.weightDemandRatio >= 0.72) {
@@ -208,6 +211,7 @@ function buildStrategyScores(profile) {
   if (profile.totalUnits >= 54) {
     addScore('space-max-beam', 2, 'Manifest co so luong units lon');
     addScore('pct-online-policy', 4, 'So luong units lon, phu hop policy online/PCT');
+    addScore('pct-flex-zone-policy', 3, 'Chay them nhanh PCT linh hoat de tim fill-rate cao hon');
   } else if (profile.totalUnits <= 18) {
     addScore('largest-first', 2, 'Manifest gon, de danh uu tien kien lon');
   }
@@ -216,10 +220,12 @@ function buildStrategyScores(profile) {
     addScore('delivery-balanced', 2, 'Nhieu rang buoc stack/load');
     addScore('heavy-base', 2, 'Can giu ong cot tai on dinh');
     addScore('pct-online-policy', 2, 'Nhieu rang buoc can cay search theo cau hinh xep');
+    addScore('pct-flex-zone-policy', 1, 'Thu phuong an linh hoat neu rang buoc zone qua chat');
   }
 
   if (profile.volumeDemandRatio >= 0.7 && profile.highRiskUnitRatio >= 0.12) {
     addScore('pct-online-policy', 3, 'Can can bang fill-rate va on dinh theo tung buoc online');
+    addScore('pct-flex-zone-policy', 2, 'Can can bang fill-rate voi overflow canh bao');
   }
 
   if (profile.fixedOrientationUnitRatio >= 0.12 && profile.totalUnits >= 24) {
@@ -253,6 +259,18 @@ function buildStrategyOverrides(profile, planningMode) {
       beamWidth: profile.totalUnits >= 72 ? 6 : profile.volumeDemandRatio >= 0.82 ? 5 : 4,
       branchFactor: profile.totalUnits >= 56 ? 2 : 3,
       beamLookaheadCount: profile.totalUnits >= 64 ? 22 : 16,
+      reorderWindow: profile.totalUnits >= 64 ? 6 : 5,
+      fillerWindow: profile.volumeDemandRatio >= 0.78 ? 12 : 9,
+      allowSoftZoneOverflow:
+        profile.highRiskUnitRatio < 0.18 || profile.volumeDemandRatio >= 0.22,
+    },
+    'pct-flex-zone-policy': {
+      beamWidth: profile.totalUnits >= 72 ? 6 : profile.volumeDemandRatio >= 0.82 ? 5 : 4,
+      branchFactor: profile.totalUnits >= 56 ? 2 : 3,
+      beamLookaheadCount: profile.totalUnits >= 64 ? 22 : 16,
+      reorderWindow: profile.totalUnits >= 64 ? 6 : 5,
+      fillerWindow: profile.volumeDemandRatio >= 0.78 ? 12 : 9,
+      allowSoftZoneOverflow: true,
     },
   };
 }
@@ -310,7 +328,13 @@ function buildRecommendations(profile, primaryStrategyId) {
 
   if (primaryStrategyId === 'pct-online-policy') {
     recommendations.push(
-      'Dung PCT Online AI de thu anchor points theo zone/layer, beam skip branch va repair sau cung.'
+      'Dung PCT Online AI de thu reorder-window beam, anchor points theo zone/layer, beam skip branch va repair sau cung.'
+    );
+  }
+
+  if (primaryStrategyId === 'pct-flex-zone-policy') {
+    recommendations.push(
+      'Dung PCT Flex Zone AI khi can uu tien so thung xep duoc, sau do review cac item tran delivery zone trong report.'
     );
   }
 
@@ -352,6 +376,7 @@ export function analyzeOptimizerManifest({
     'largest-first',
     'space-max-beam',
     'pct-online-policy',
+    'pct-flex-zone-policy',
     'heavy-base',
     'unload-friendly',
   ];
