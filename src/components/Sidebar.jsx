@@ -8,20 +8,30 @@ const NAVIGABLE_SIDEBAR_SECTIONS = SIDEBAR_SECTIONS.filter(
 );
 
 export default function Sidebar({ disabled = false }) {
-  const sidebarRef = useRef(null);
+  const sidebarScrollRef = useRef(null);
   const [activeSectionId, setActiveSectionId] = useState(NAVIGABLE_SIDEBAR_SECTIONS[0].id);
 
+  function getSectionScrollOffset(sectionElement) {
+    const sidebarScrollElement = sidebarScrollRef.current;
+    if (!sidebarScrollElement || !sectionElement) return 0;
+
+    const sidebarRect = sidebarScrollElement.getBoundingClientRect();
+    const sectionRect = sectionElement.getBoundingClientRect();
+
+    return sectionRect.top - sidebarRect.top + sidebarScrollElement.scrollTop;
+  }
+
   useEffect(() => {
-    const sidebarElement = sidebarRef.current;
-    if (!sidebarElement) return undefined;
+    const sidebarScrollElement = sidebarScrollRef.current;
+    if (!sidebarScrollElement) return undefined;
 
     const updateActiveSection = () => {
-      const scrollMarker = sidebarElement.scrollTop + 120;
+      const scrollMarker = sidebarScrollElement.scrollTop + 120;
       let nextActiveSectionId = NAVIGABLE_SIDEBAR_SECTIONS[0].id;
 
       NAVIGABLE_SIDEBAR_SECTIONS.forEach((section) => {
         const sectionElement = document.getElementById(section.id);
-        if (sectionElement && sectionElement.offsetTop <= scrollMarker) {
+        if (sectionElement && getSectionScrollOffset(sectionElement) <= scrollMarker) {
           nextActiveSectionId = section.id;
         }
       });
@@ -34,35 +44,35 @@ export default function Sidebar({ disabled = false }) {
     };
 
     updateActiveSection();
-    sidebarElement.addEventListener('scroll', updateActiveSection, { passive: true });
+    sidebarScrollElement.addEventListener('scroll', updateActiveSection, { passive: true });
 
     return () => {
-      sidebarElement.removeEventListener('scroll', updateActiveSection);
+      sidebarScrollElement.removeEventListener('scroll', updateActiveSection);
     };
   }, []);
 
   function jumpToSection(sectionId) {
-    const sidebarElement = sidebarRef.current;
+    const sidebarScrollElement = sidebarScrollRef.current;
     const sectionElement = document.getElementById(sectionId);
 
-    if (!sidebarElement || !sectionElement) return;
+    if (!sidebarScrollElement || !sectionElement) return;
 
     if ('open' in sectionElement) {
       sectionElement.open = true;
     }
 
-    sidebarElement.scrollTo({
-      top: Math.max(sectionElement.offsetTop - 88, 0),
+    sidebarScrollElement.scrollTo({
+      top: Math.max(getSectionScrollOffset(sectionElement) - 16, 0),
       behavior: 'smooth',
     });
     setActiveSectionId(sectionId);
   }
 
   function setAllSectionsOpen(isOpen) {
-    const sidebarElement = sidebarRef.current;
-    if (!sidebarElement) return;
+    const sidebarScrollElement = sidebarScrollRef.current;
+    if (!sidebarScrollElement) return;
 
-    sidebarElement.querySelectorAll('.sidebar-card').forEach((sectionElement) => {
+    sidebarScrollElement.querySelectorAll('.sidebar-card').forEach((sectionElement) => {
       sectionElement.open = isOpen;
     });
   }
@@ -71,7 +81,6 @@ export default function Sidebar({ disabled = false }) {
     <aside
       className={`sidebar ${disabled ? 'sidebar-booting' : ''}`}
       id="sidebar"
-      ref={sidebarRef}
       aria-busy={disabled}
     >
       <SidebarWorkspaceMap
@@ -82,10 +91,12 @@ export default function Sidebar({ disabled = false }) {
         onCollapseAll={() => setAllSectionsOpen(false)}
       />
 
-      {SIDEBAR_SECTIONS.map((section) => {
-        const Component = section.component;
-        return <Component key={section.id} />;
-      })}
+      <div className="sidebar-scroll-content" ref={sidebarScrollRef}>
+        {SIDEBAR_SECTIONS.map((section) => {
+          const Component = section.component;
+          return <Component key={section.id} />;
+        })}
+      </div>
     </aside>
   );
 }

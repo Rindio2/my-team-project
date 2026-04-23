@@ -6,7 +6,7 @@ const CONTACT_EPSILON = 0.000001;
 const FACE_SNAP_TOLERANCE = 1.25;
 const MIN_SUPPORT_RATIO = 0.78;
 const PACKING_ALGORITHM_LABEL =
-  'Manifest-aware strategy dispatch + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
+  'Manifest-aware strategy dispatch + PCT-inspired online policy + extreme points + multi-strategy greedy scoring + local compaction + face snap + repair insertion + allowed orientations + support check + noStack/noTilt + floor load + load balance';
 
 function resolveStackLimit(rawLimit) {
   const value = Number(rawLimit);
@@ -226,6 +226,37 @@ const STRATEGY_PRESETS = [
 
       const weightDiff = Number(b.weight || 0) - Number(a.weight || 0);
       if (weightDiff !== 0) return weightDiff;
+
+      return defaultItemComparator(a, b);
+    },
+  },
+  {
+    id: 'pct-online-policy',
+    label: 'PCT Online AI',
+    pointSortMode: 'pct-deep-bottom-left',
+    scoringProfile: 'pct',
+    searchMode: 'beam',
+    beamWidth: 4,
+    branchFactor: 2,
+    beamLookaheadCount: 16,
+    itemComparator: (a, b) => {
+      const specificityDiff = getZoneSpecificity(b.deliveryZone) - getZoneSpecificity(a.deliveryZone);
+      if (specificityDiff !== 0) return specificityDiff;
+
+      if (b.deliveryOrder !== a.deliveryOrder) {
+        return b.deliveryOrder - a.deliveryOrder;
+      }
+
+      if (a.fragile !== b.fragile) {
+        return Number(a.fragile) - Number(b.fragile);
+      }
+
+      const densityA = getVolume(a) > 0 ? Number(a.weight || 0) / getVolume(a) : 0;
+      const densityB = getVolume(b) > 0 ? Number(b.weight || 0) / getVolume(b) : 0;
+      if (densityB !== densityA) return densityB - densityA;
+
+      const volDiff = getVolume(b) - getVolume(a);
+      if (volDiff !== 0) return volDiff;
 
       return defaultItemComparator(a, b);
     },
@@ -863,6 +894,22 @@ function scorePlacement(box, container, supportInfo, placed, scoringProfile = 'b
       widthSpanPenalty: 70,
       contactBonus: 205,
     },
+    pct: {
+      floorPenalty: 26,
+      headPenalty: 1.05,
+      deliveryWeight: 0.34,
+      lateralPenalty: 0.18,
+      supportPenalty: 165,
+      sideBalancePenalty: 145,
+      lengthBalancePenalty: 86,
+      cogXPenalty: 0.24,
+      cogZPenalty: 0.12,
+      wastePenalty: 310,
+      heightSpanPenalty: 165,
+      depthSpanPenalty: 92,
+      widthSpanPenalty: 76,
+      contactBonus: 245,
+    },
   };
 
   const profile = profiles[scoringProfile] || profiles.balance;
@@ -995,6 +1042,14 @@ function getPointComparator(mode, container) {
       a.y - b.y ||
       Math.abs(a.x - centerX) - Math.abs(b.x - centerX) ||
       a.x - b.x;
+  }
+
+  if (mode === 'pct-deep-bottom-left') {
+    return (a, b) =>
+      a.y - b.y ||
+      a.z - b.z ||
+      a.x - b.x ||
+      Math.abs(a.x - centerX) - Math.abs(b.x - centerX);
   }
 
   return (a, b) => a.y - b.y || a.z - b.z || a.x - b.x;

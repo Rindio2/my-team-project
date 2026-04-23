@@ -5,7 +5,7 @@
 ## Những gì đã có
 
 - Dựng container 3D và preview item theo danh sách SKU.
-- Chạy `AI Cơ bản`, `AI Pro` và heuristic `Sắp xếp tối ưu`.
+- Chạy `AI Cơ bản`, `AI Pro` và heuristic `Sắp xếp tối ưu`, có thêm nhánh `PCT Online AI` lấy cảm hứng từ Online 3D-BPP-PCT nhưng được viết lại bằng JS để chạy offline trong browser.
 - Kiểm tra tải trọng, `noStack`, `noTilt`, xoay hướng, tải sàn, cân bằng tải, `deliveryZone`, `stackLimit`, `maxLoadAbove`.
 - Chỉnh tay box trong scene, undo/redo, lưu và khôi phục scene.
 - Tính sức chứa, dựng layout từ sức chứa và hiển thị chống sốc.

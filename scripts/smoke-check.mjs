@@ -44,6 +44,10 @@ assert.ok(
   packingResult.optimizerIntelligence?.selectedStrategyId,
   'Smoke test yêu cầu optimizer trả về optimizer intelligence cho manifest.'
 );
+assert.ok(
+  packingResult.evaluatedStrategies.some((strategy) => strategy.id === 'pct-online-policy'),
+  'Smoke test yêu cầu optimizer chạy chiến lược PCT Online AI.'
+);
 
 const preflight = runCommercialPreflight({
   items: manifest,

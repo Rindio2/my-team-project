@@ -2,6 +2,7 @@ const STRATEGY_LABELS = {
   'delivery-balanced': 'Can bang giao hang',
   'largest-first': 'Kien lon truoc',
   'space-max-beam': 'Lap day khong gian',
+  'pct-online-policy': 'PCT Online AI',
   'heavy-base': 'Nen chiu tai',
   'unload-friendly': 'Uu tien do hang',
 };
@@ -204,6 +205,7 @@ function buildStrategyScores(profile) {
 
   if (profile.totalUnits >= 54) {
     addScore('space-max-beam', 2, 'Manifest co so luong units lon');
+    addScore('pct-online-policy', 4, 'So luong units lon, phu hop policy online/PCT');
   } else if (profile.totalUnits <= 18) {
     addScore('largest-first', 2, 'Manifest gon, de danh uu tien kien lon');
   }
@@ -211,6 +213,15 @@ function buildStrategyScores(profile) {
   if (profile.controlledUnitRatio >= 0.2) {
     addScore('delivery-balanced', 2, 'Nhieu rang buoc stack/load');
     addScore('heavy-base', 2, 'Can giu ong cot tai on dinh');
+    addScore('pct-online-policy', 2, 'Nhieu rang buoc can cay search theo cau hinh xep');
+  }
+
+  if (profile.volumeDemandRatio >= 0.7 && profile.highRiskUnitRatio >= 0.12) {
+    addScore('pct-online-policy', 3, 'Can can bang fill-rate va on dinh theo tung buoc online');
+  }
+
+  if (profile.fixedOrientationUnitRatio >= 0.12 && profile.totalUnits >= 24) {
+    addScore('pct-online-policy', 2, 'Nhieu orientation bi gioi han, can policy uu tien diem dat sau-duoi-trai');
   }
 
   addScore('delivery-balanced', 1, 'Luon giu mot nhanh can bang tong quat');
@@ -236,6 +247,11 @@ function buildStrategyOverrides(profile, planningMode) {
             scoringProfile: 'support',
           }
         : {},
+    'pct-online-policy': {
+      beamWidth: profile.totalUnits >= 72 ? 5 : 4,
+      branchFactor: profile.totalUnits >= 56 ? 2 : 3,
+      beamLookaheadCount: profile.totalUnits >= 64 ? 18 : 14,
+    },
   };
 }
 
@@ -290,6 +306,12 @@ function buildRecommendations(profile, primaryStrategyId) {
     `Uu tien heuristic ${getStrategyLabel(primaryStrategyId)} cho lan toi uu dau tien.`,
   ];
 
+  if (primaryStrategyId === 'pct-online-policy') {
+    recommendations.push(
+      'Dung PCT Online AI de giu quyet dinh xep theo tung buoc, uu tien diem dat sau-duoi-trai va repair sau cung.'
+    );
+  }
+
   if (profile.highRiskUnitRatio >= 0.24) {
     recommendations.push('Review ky support ratio, stack level va tai de tren cac item nhay cam.');
   }
@@ -327,6 +349,7 @@ export function analyzeOptimizerManifest({
     'delivery-balanced',
     'largest-first',
     'space-max-beam',
+    'pct-online-policy',
     'heavy-base',
     'unload-friendly',
   ];

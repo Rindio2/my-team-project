@@ -273,7 +273,9 @@ body {
   width: 368px;
   flex: 0 0 368px;
   padding: 14px;
-  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   background:
     linear-gradient(180deg, rgba(12, 23, 39, 0.96), rgba(10, 18, 31, 0.94)),
     radial-gradient(circle at top, rgba(38, 209, 155, 0.08), transparent 34%);
@@ -288,16 +290,23 @@ body {
     border-radius 0.28s ease;
 }
 
-.sidebar::-webkit-scrollbar {
+.sidebar-scroll-content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.sidebar-scroll-content::-webkit-scrollbar {
   width: 10px;
 }
 
-.sidebar::-webkit-scrollbar-track {
+.sidebar-scroll-content::-webkit-scrollbar-track {
   background: rgba(15, 23, 42, 0.55);
   border-radius: 999px;
 }
 
-.sidebar::-webkit-scrollbar-thumb {
+.sidebar-scroll-content::-webkit-scrollbar-thumb {
   background: linear-gradient(180deg, rgba(38, 209, 155, 0.62), rgba(82, 183, 255, 0.4));
   border-radius: 999px;
 }
@@ -310,17 +319,14 @@ body {
 }
 
 .sidebar-workspace-map {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  margin-bottom: 12px;
-  padding: 12px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
   border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(8, 15, 26, 0.98), rgba(13, 24, 40, 0.94)),
     radial-gradient(circle at top left, rgba(38, 209, 155, 0.12), transparent 38%);
   border: 1px solid rgba(82, 183, 255, 0.14);
-  box-shadow: 0 20px 30px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 14px 24px rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(18px);
 }
 
@@ -328,60 +334,104 @@ body {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
+}
+
+.sidebar-workspace-map-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .sidebar-workspace-map-kicker {
-  font-size: 0.64rem;
-  letter-spacing: 0.14em;
+  font-size: 0.56rem;
+  letter-spacing: 0.13em;
   text-transform: uppercase;
   color: #8fd9ff;
 }
 
 .sidebar-workspace-map-title {
-  margin-top: 6px;
-  font-size: 0.88rem;
+  margin-top: 3px;
+  font-size: 0.9rem;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.2;
   color: #f8fbff;
+}
+
+.sidebar-workspace-map-note {
+  margin-top: 3px;
+  color: #8fa7c2;
+  font-size: 0.68rem;
+  line-height: 1.4;
+  max-width: 220px;
+}
+
+.sidebar-workspace-map-note b {
+  color: #dff7ff;
 }
 
 .sidebar-workspace-map-actions {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
   justify-content: flex-end;
+  flex: 0 0 auto;
 }
 
 .sidebar-utility-btn {
   min-height: 32px;
-  padding: 6px 10px;
+  padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.78);
+  background: rgba(15, 23, 42, 0.92);
   border: 1px solid rgba(82, 183, 255, 0.14);
   color: #dbeafe;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
   box-shadow: none;
 }
 
+.sidebar-map-toggle {
+  min-width: 76px;
+  background: linear-gradient(135deg, rgba(20, 78, 108, 0.94), rgba(16, 116, 95, 0.82));
+  border-color: rgba(45, 212, 191, 0.28);
+}
+
 .sidebar-workspace-map-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(82, 183, 255, 0.12);
+}
+
+.sidebar-workspace-map-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid rgba(82, 183, 255, 0.1);
 }
 
 .sidebar-map-chip {
-  min-height: 34px;
-  display: inline-flex;
+  width: 100%;
+  min-height: 36px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: 999px;
+  gap: 6px;
+  justify-content: center;
+  padding: 8px 9px;
+  border-radius: 14px;
   background: rgba(19, 39, 61, 0.9);
   border: 1px solid rgba(82, 183, 255, 0.14);
   color: #d8e9f9;
   box-shadow: none;
+}
+
+.sidebar-map-chip-compact {
+  min-height: 30px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  justify-content: flex-start;
 }
 
 .sidebar-map-chip.active {
@@ -391,7 +441,23 @@ body {
 }
 
 .sidebar-map-chip-icon {
-  font-size: 0.86rem;
+  font-size: 0.8rem;
+}
+
+.sidebar-map-chip span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.sidebar-workspace-map-bulk-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
 }
 
 .sidebar-card,
@@ -450,7 +516,7 @@ body {
 
 .sidebar-card-body {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   padding: 0 14px 14px;
 }
 
@@ -677,6 +743,14 @@ button:focus-visible,
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.mission-workflow-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.manifest-secondary-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .command-tile {
   min-height: 72px;
   display: flex;
@@ -842,8 +916,8 @@ button:focus-visible,
 
 .manifest-import-card {
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
   border-radius: 16px;
   background: rgba(8, 15, 26, 0.5);
   border: 1px dashed rgba(82, 183, 255, 0.18);
@@ -1461,20 +1535,12 @@ code {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .mission-hub-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .mission-workflow-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .operations-mini-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .sidebar-workspace-map-head {
-    flex-direction: column;
-  }
-
-  .sidebar-workspace-map-actions {
-    justify-content: flex-start;
   }
 }
 
@@ -1504,6 +1570,10 @@ code {
     max-height: none;
   }
 
+  .sidebar-scroll-content {
+    overflow: visible;
+  }
+
   .sidebar.collapsed {
     width: 100%;
     flex-basis: auto;
@@ -1523,6 +1593,7 @@ code {
   .operations-metric-grid,
   .operations-mini-grid,
   .mission-hub-actions,
+  .mission-workflow-actions,
   .command-grid,
   .manual-mode-grid,
   .manual-quick-grid {
@@ -1565,5 +1636,40 @@ code {
 
   .sidebar-workspace-map {
     position: static;
+  }
+
+  .sidebar-workspace-map-head {
+    align-items: flex-start;
+  }
+
+  .sidebar-workspace-map-actions {
+    width: auto;
+  }
+
+  .sidebar-workspace-map-note {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .sidebar-workspace-map-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sidebar-workspace-map-actions {
+    width: 100%;
+  }
+
+  .sidebar-map-toggle {
+    width: 100%;
+  }
+
+  .sidebar-workspace-map-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sidebar-workspace-map-quick-grid {
+    grid-template-columns: 1fr;
   }
 }

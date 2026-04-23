@@ -62,7 +62,7 @@ export default function MissionControlSection() {
         {SCENARIO_PRESETS[0].description}
       </div>
 
-      <div className="command-grid mission-hub-actions">
+      <div className="command-grid mission-workflow-actions">
         {WORKFLOW_COMMANDS.map((action) => (
           <CommandButton
             key={action.command}
@@ -88,16 +88,25 @@ Soundbar,18,16,105,8,28,true,false,true,2,middle,2,24`}
           />
         </FieldGroup>
 
-        <div className="command-grid mission-hub-actions">
-          {MANIFEST_COMMANDS.map((action) => (
-            <CommandButton
-              key={action.command}
-              command={action.command}
-              label={action.label}
-              hint={action.hint}
-              className={action.className}
-            />
-          ))}
+        <div className="stacked-action-grid">
+          <CommandButton
+            command={MANIFEST_COMMANDS[0].command}
+            label={MANIFEST_COMMANDS[0].label}
+            hint={MANIFEST_COMMANDS[0].hint}
+            className={MANIFEST_COMMANDS[0].className}
+            fullWidth
+          />
+          <div className="command-grid manifest-secondary-actions">
+            {MANIFEST_COMMANDS.slice(1).map((action) => (
+              <CommandButton
+                key={action.command}
+                command={action.command}
+                label={action.label}
+                hint={action.hint}
+                className={action.className}
+              />
+            ))}
+          </div>
         </div>
 
         <input

@@ -1,4 +1,4 @@
 Contact: mailto:security@packet-opt.example
 Expires: 2027-12-31T23:59:59.000Z
 Preferred-Languages: vi, en
-Canonical: http://127.0.0.1:8788/.well-known/security.txt
+Canonical: https://packet-opt-control-tower.pages.dev/.well-known/security.txt
